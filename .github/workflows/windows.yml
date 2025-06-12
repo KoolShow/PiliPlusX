@@ -1,0 +1,82 @@
+# GitHub Action for building a Flutter Windows application
+
+name: Windows Release
+
+# Allows you to run this workflow manually from the Actions tab
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    # Use the latest Windows runner
+    runs-on: windows-latest
+
+    steps:
+      # 1. Check out the repository code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history for all branches and tags for accurate versioning
+          fetch-depth: 0
+
+      # 2. Set up Flutter SDK with caching
+      # This action handles downloading, installing, and adding Flutter to the PATH.
+      # It also has built-in caching, which is more reliable than a manual cache setup.
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable' # or 'beta', 'dev'
+          # Automatically reads the version from pubspec.yaml
+          flutter-version-file: pubspec.yaml
+          cache: true # Enable caching for faster subsequent runs
+
+      # 3. Enable Windows desktop support (if not already enabled)
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      # 4. Download project dependencies
+      - name: Get Dependencies
+        run: flutter pub get
+
+      # 5. Update the version number in pubspec.yaml
+      # This step uses PowerShell, which is native to the Windows runner.
+      - name: Update Version
+        run: |
+          # Get the base version from pubspec.yaml (e.g., "1.2.3")
+          $pubspec = Get-Content pubspec.yaml | ConvertFrom-Yaml
+          $versionName = $pubspec.version.Split('+')[0]
+
+          # Get git commit info
+          $shortSha = git rev-parse --short HEAD
+          $commitCount = git rev-list --count HEAD
+
+          # Create the new version string
+          $newVersion = "$versionName-$shortSha+$commitCount"
+
+          # Read the pubspec.yaml file content
+          $fileContent = Get-Content pubspec.yaml -Raw
+
+          # Replace the old version line with the new one
+          $newContent = $fileContent -replace '(?m)^version: .*$', "version: $newVersion"
+
+          # Write the updated content back to the file
+          Set-Content pubspec.yaml -Value $newContent
+
+          echo "Version updated to: $newVersion"
+          Get-Content pubspec.yaml | Select-String "version:"
+
+      # 6. Build the Windows application
+      - name: 構建 Windows 應用 (Build Windows)
+        run: flutter build windows --release
+
+      # 7. Compress the build output into a zip file for easy download
+      # The output is a folder containing the EXE and all necessary DLLs.
+      - name: Zip Release Artifact
+        run: Compress-Archive -Path "build\windows\runner\Release\*" -DestinationPath "windows-release.zip"
+
+      # 8. Upload the zip file as a build artifact
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-build
+          path: windows-release.zip

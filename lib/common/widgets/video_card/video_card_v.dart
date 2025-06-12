@@ -90,6 +90,8 @@ class VideoCardV extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Card(
+          color: Colors.transparent,
+          elevation: 0,
           child: InkWell(
             onTap: onPushDetail,
             onLongPress: onLongPress,

@@ -274,13 +274,6 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
       mainAxisSize: .min,
       children: [
         GestureDetector(
-          onTap: () => Utils.copyText(introController.bvid),
-          child: Text(
-            introController.bvid,
-            style: TextStyle(fontSize: 14, color: colorScheme.secondary),
-          ),
-        ),
-        GestureDetector(
           onTap: () => Utils.copyText('av${introController.aid}'),
           child: Text(
             'av${introController.aid}',
@@ -293,7 +286,7 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
       const SizedBox(height: 8),
       SelectionText.rich(
         buildDesc(descV2),
-        style: const TextStyle(height: 1.4),
+        style: const TextStyle(fontSize: 12, height: 1.2),
       ),
     ],
     NoTranslucentArea(
@@ -948,6 +941,16 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
     return Row(
       spacing: 10,
       children: [
+        GestureDetector(
+          onTap: () => Utils.copyText(introController.bvid),
+          child: Text(
+            introController.bvid,
+            style: TextStyle(
+              fontSize: 10,
+              color: colorScheme.secondary,
+            ),
+          ),
+        ),
         StatWidget(
           type: .play,
           value: stat?.view,

@@ -267,7 +267,7 @@ class _MediaPageState extends CommonPageState<MinePage>
             child: Row(
               mainAxisSize: .min,
               children: [
-                const SizedBox(width: 20),
+                const SizedBox(width: 25),
                 userInfo.face != null
                     ? Stack(
                         clipBehavior: .none,
@@ -275,8 +275,8 @@ class _MediaPageState extends CommonPageState<MinePage>
                           NetworkImgLayer(
                             src: userInfo.face,
                             type: .avatar,
-                            width: 55,
-                            height: 55,
+                            width: 65,
+                            height: 65,
                           ),
                           if (isVip)
                             Positioned(

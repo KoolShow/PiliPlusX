@@ -206,8 +206,8 @@ Widget userAvatar({
             children: [
               NetworkImgLayer(
                 type: .avatar,
-                width: 34,
-                height: 34,
+                width: 44,
+                height: 44,
                 src: mainController.accountService.face.value,
               ),
               Positioned.fill(

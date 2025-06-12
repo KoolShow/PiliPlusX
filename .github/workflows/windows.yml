@@ -66,7 +66,7 @@ jobs:
           Get-Content pubspec.yaml | Select-String "version:"
 
       # 6. Build the Windows application
-      - name: 構建 Windows 應用 (Build Windows)
+      - name: Build Windows
         run: flutter build windows --release
 
       # 7. Compress the build output into a zip file for easy download

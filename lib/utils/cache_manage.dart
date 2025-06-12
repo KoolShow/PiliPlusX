@@ -96,7 +96,11 @@ class CacheManage {
       final List<FileSystemEntity> children =
           appDocDir.listSync(recursive: false);
       for (final FileSystemEntity file in children) {
-        await file.delete(recursive: true);
+        try {
+          await file.delete(recursive: true);
+        } catch (e) {
+          print('Error deleting file: $e');
+        }
       }
     }
   }

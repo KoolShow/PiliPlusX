@@ -97,7 +97,11 @@ class _HomePageState extends CommonPageState<HomePage>
     const padding = EdgeInsets.fromLTRB(14, 6, 14, 0);
     final child = Row(
       children: [
-        userAvatar(colorScheme: _colorScheme, mainController: _mainController),
+        userAvatar(
+          colorScheme: _colorScheme,
+          mainController: _mainController,
+          onTap: () => _homeController.showUserInfoDialog(context),
+        ),
         const SizedBox(width: 8),
         searchBar(),
         const SizedBox(width: 4),
@@ -195,6 +199,7 @@ class _HomePageState extends CommonPageState<HomePage>
 Widget userAvatar({
   required ColorScheme colorScheme,
   required MainController mainController,
+  VoidCallback? onTap,
 }) {
   return Semantics(
     label: "我的",
@@ -214,7 +219,7 @@ Widget userAvatar({
                 child: Material(
                   type: .transparency,
                   child: InkWell(
-                    onTap: mainController.toMinePage,
+                    onTap: onTap ?? mainController.toMinePage,
                     splashColor: colorScheme.primaryContainer.withValues(
                       alpha: 0.3,
                     ),
@@ -256,7 +261,7 @@ Widget userAvatar({
               padding: .zero,
               backgroundColor: colorScheme.onInverseSurface,
             ),
-            onPressed: mainController.toMinePage,
+            onPressed: onTap ?? mainController.toMinePage,
             icon: Icon(
               Icons.person_rounded,
               size: 22,

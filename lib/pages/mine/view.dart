@@ -22,15 +22,20 @@ import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class MinePage extends StatefulWidget {
-  const MinePage({super.key, this.showBackBtn = false});
+  const MinePage({
+    super.key,
+    this.showBackBtn = false,
+    this.isUserInfo = false,
+  });
 
   final bool showBackBtn;
+  final bool isUserInfo;
 
   @override
-  State<MinePage> createState() => _MediaPageState();
+  State<MinePage> createState() => _MinePageState();
 }
 
-class _MediaPageState extends CommonPageState<MinePage, MineController>
+class _MinePageState extends CommonPageState<MinePage, MineController>
     with AutomaticKeepAliveClientMixin {
   @override
   MineController controller = Get.put(MineController());
@@ -64,11 +69,26 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
     super.build(context);
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
+
+    if (widget.isUserInfo) {
+      return onBuild(
+        IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              _buildHeaderActions,
+              const SizedBox(height: 10),
+              Obx(() => _buildUserInfo(theme, secondary)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return onBuild(
       Column(
         children: [
-          const SizedBox(height: 10),
-          _buildHeaderActions,
           const SizedBox(height: 10),
           Expanded(
             child: Material(
@@ -335,16 +355,20 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                                     TextSpan(
                                       text: '硬币 ',
                                       style: TextStyle(
-                                        fontSize:
-                                            theme.textTheme.labelSmall!.fontSize,
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
                                         color: theme.colorScheme.outline,
                                       ),
                                     ),
                                     TextSpan(
                                       text: userInfo.money?.toString() ?? '-',
                                       style: TextStyle(
-                                        fontSize:
-                                            theme.textTheme.labelSmall!.fontSize,
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
                                         fontWeight: FontWeight.bold,
                                         color: theme.colorScheme.primary,
                                       ),
@@ -352,8 +376,10 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                                     TextSpan(
                                       text: "    经验 ",
                                       style: TextStyle(
-                                        fontSize:
-                                            theme.textTheme.labelSmall!.fontSize,
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
                                         color: theme.colorScheme.outline,
                                       ),
                                     ),
@@ -362,8 +388,10 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                                       semanticsLabel:
                                           "当前${levelInfo?.currentExp ?? '-'}",
                                       style: TextStyle(
-                                        fontSize:
-                                            theme.textTheme.labelSmall!.fontSize,
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
                                         fontWeight: FontWeight.bold,
                                         color: theme.colorScheme.primary,
                                       ),
@@ -373,8 +401,10 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                                       semanticsLabel:
                                           "升级需${levelInfo?.nextExp ?? '-'}",
                                       style: TextStyle(
-                                        fontSize:
-                                            theme.textTheme.labelSmall!.fontSize,
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
                                         color: theme.colorScheme.outline,
                                       ),
                                     ),
@@ -390,11 +420,12 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                                   : 0,
                               backgroundColor: theme.colorScheme.inversePrimary,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                  theme.colorScheme.primary),
+                                theme.colorScheme.primary,
+                              ),
                             ),
                           ],
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),

@@ -99,7 +99,7 @@ class HomeController extends GetxController
       context: context,
       useSafeArea: true,
       builder: (context) => const Dialog(
-        child: MinePage(),
+        child: MinePage(isUserInfo: true),
       ),
     );
   }

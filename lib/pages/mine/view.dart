@@ -77,6 +77,23 @@ class _MediaPageState extends CommonPageState<MinePage>
   Widget build(BuildContext context) {
     super.build(context);
     final secondary = theme.colorScheme.secondary;
+
+    if (widget.isUserInfo) {
+      return onBuild(
+        IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              _buildHeaderActions,
+              const SizedBox(height: 10),
+              _buildUserInfo(theme, secondary),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Column(
       children: [
         Padding(

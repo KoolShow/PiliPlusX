@@ -6,7 +6,9 @@ import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/models/common/home_tab_type.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
+import 'package:PiliPlus/pages/mine/view.dart';
 import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -94,5 +96,15 @@ class HomeController extends GetxController
         // defaultSearch.value = res.data['data']?['show_name'] ?? '';
       }
     } catch (_) {}
+  }
+  void showUserInfoDialog(BuildContext context) {
+    feedBack();
+    showDialog(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => const Dialog(
+        child: MinePage(),
+      ),
+    );
   }
 }

@@ -3,12 +3,16 @@ import 'dart:math';
 import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/init.dart';
+import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/http/sponsor_block.dart';
 import 'package:PiliPlus/models/common/sponsor_block/segment_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
+import 'package:PiliPlus/models_new/sponsor_block/user_info.dart';
 import 'package:PiliPlus/pages/setting/slide_color_picker.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:get/get.dart';
@@ -26,28 +30,23 @@ class SponsorBlockPage extends StatefulWidget {
 class _SponsorBlockPageState extends State<SponsorBlockPage> {
   final _url = 'https://github.com/hanydd/BilibiliSponsorBlock';
   final _textController = TextEditingController();
-  late double _blockLimit;
-  late List<Pair<SegmentType, SkipType>> _blockSettings;
-  late List<Color> _blockColor;
-  late String _userId;
-  late bool _blockToast;
-  late String _blockServer;
-  late bool _blockTrack;
-  bool? _serverStatus;
+  double _blockLimit = Pref.blockLimit;
+  final List<Pair<SegmentType, SkipType>> _blockSettings = Pref.blockSettings;
+  final List<Color> _blockColor = Pref.blockColor;
+  String _userId = Pref.blockUserID;
+  bool _blockToast = Pref.blockToast;
+  String _blockServer = Pref.blockServer;
+  bool _blockTrack = Pref.blockTrack;
+  final _serverStatus = Rxn<bool>();
+  final _userInfo = LoadingState<UserInfo>.loading().obs;
 
-  Box get setting => GStorage.setting;
+  Box setting = GStorage.setting;
 
   @override
   void initState() {
     super.initState();
-    _blockLimit = GStorage.blockLimit;
-    _blockSettings = GStorage.blockSettings;
-    _blockColor = GStorage.blockColor;
-    _userId = GStorage.blockUserID;
-    _blockToast = GStorage.blockToast;
-    _blockServer = GStorage.blockServer;
-    _blockTrack = GStorage.blockTrack;
     _checkServerStatus();
+    _getUserInfo();
   }
 
   @override
@@ -56,36 +55,37 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
     super.dispose();
   }
 
-  void _checkServerStatus() {
-    Request()
-        .get(
-      '$_blockServer/api/status/uptime',
-    )
-        .then((res) {
-      if (mounted) {
-        setState(() {
-          _serverStatus = res.statusCode == 200 &&
-              res.data is String &&
-              Utils.isStringNumeric(res.data);
-        });
-      }
-    });
+  Future<void> _checkServerStatus() async {
+    _serverStatus.value = (await SponsorBlock.uptimeStatus()).isSuccess;
+  }
+
+  Future<void> _getUserInfo() async {
+    _userInfo.value = await SponsorBlock.userInfo(const [
+      'viewCount',
+      'minutesSaved',
+      'segmentCount',
+    ], userId: _userId);
   }
 
   Widget _blockLimitItem(
-          ThemeData theme, TextStyle titleStyle, TextStyle subTitleStyle) =>
-      ListTile(
+    ThemeData theme,
+    TextStyle titleStyle,
+    TextStyle subTitleStyle,
+  ) => Builder(
+    builder: (context) {
+      return ListTile(
         dense: true,
         onTap: () {
           _textController.text = _blockLimit.toString();
           showDialog(
             context: context,
-            builder: (BuildContext context) {
+            builder: (_) {
               return AlertDialog(
                 title: Text('最短片段时长', style: titleStyle),
                 content: TextFormField(
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   controller: _textController,
                   autofocus: true,
                   decoration: const InputDecoration(suffixText: 's'),
@@ -107,12 +107,14 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                     onPressed: () {
                       Get.back();
                       _blockLimit = max(
-                          0.0, double.tryParse(_textController.text) ?? 0.0);
+                        0.0,
+                        double.tryParse(_textController.text) ?? 0.0,
+                      );
                       setting.put(SettingBoxKey.blockLimit, _blockLimit);
-                      setState(() {});
+                      (context as Element).markNeedsBuild();
                     },
                     child: const Text('确定'),
-                  )
+                  ),
                 ],
               );
             },
@@ -128,17 +130,23 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           style: const TextStyle(fontSize: 13),
         ),
       );
+    },
+  );
 
-  Widget _aboudItem(TextStyle titleStyle, TextStyle subTitleStyle) => ListTile(
-        dense: true,
-        title: Text('关于空降助手', style: titleStyle),
-        subtitle: Text(_url, style: subTitleStyle),
-        onTap: () => PageUtils.launchURL(_url),
-      );
+  Widget _aboutItem(TextStyle titleStyle, TextStyle subTitleStyle) => ListTile(
+    dense: true,
+    title: Text('关于空降助手', style: titleStyle),
+    subtitle: Text(_url, style: subTitleStyle),
+    onTap: () => PageUtils.launchURL(_url),
+  );
 
   Widget _userIdItem(
-          ThemeData theme, TextStyle titleStyle, TextStyle subTitleStyle) =>
-      ListTile(
+    ThemeData theme,
+    TextStyle titleStyle,
+    TextStyle subTitleStyle,
+  ) => Builder(
+    builder: (context) {
+      return ListTile(
         dense: true,
         title: Text('用户ID', style: titleStyle),
         subtitle: Text(_userId, style: subTitleStyle),
@@ -147,7 +155,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           _textController.text = _userId;
           showDialog(
             context: context,
-            builder: (BuildContext context) {
+            builder: (_) {
               return AlertDialog(
                 title: Text('用户ID', style: titleStyle),
                 content: Form(
@@ -174,7 +182,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                       Get.back();
                       _userId = const Uuid().v4().replaceAll('-', '');
                       setting.put(SettingBoxKey.blockUserID, _userId);
-                      setState(() {});
+                      (context as Element).markNeedsBuild();
                     },
                     child: const Text('随机'),
                   ),
@@ -193,93 +201,126 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                         Get.back();
                         _userId = _textController.text;
                         setting.put(SettingBoxKey.blockUserID, _userId);
-                        setState(() {});
+                        (context as Element).markNeedsBuild();
                       }
                     },
                     child: const Text('确定'),
-                  )
+                  ),
                 ],
               );
             },
           );
         },
       );
+    },
+  );
 
-  void _updateBlockToast() {
-    _blockToast = !_blockToast;
-    setting.put(SettingBoxKey.blockToast, _blockToast);
-    setState(() {});
-  }
+  Widget _blockToastItem(TextStyle titleStyle) => Builder(
+    builder: (context) {
+      void update() {
+        _blockToast = !_blockToast;
+        setting.put(SettingBoxKey.blockToast, _blockToast);
+        (context as Element).markNeedsBuild();
+      }
 
-  void _updateBlockTrack() {
-    _blockTrack = !_blockTrack;
-    setting.put(SettingBoxKey.blockTrack, _blockTrack);
-    setState(() {});
-  }
-
-  Widget _blockToastItem(TextStyle titleStyle) => ListTile(
-      dense: true,
-      onTap: _updateBlockToast,
-      title: Text(
-        '显示跳过Toast',
-        style: titleStyle,
-      ),
-      trailing: Transform.scale(
-        alignment: Alignment.centerRight,
-        scale: 0.8,
-        child: Switch(
-          thumbIcon: WidgetStateProperty.resolveWith<Icon?>((states) {
-            if (states.isNotEmpty && states.first == WidgetState.selected) {
-              return const Icon(Icons.done);
-            }
-            return null;
-          }),
-          value: _blockToast,
-          onChanged: (val) {
-            _updateBlockToast();
-          },
+      return ListTile(
+        dense: true,
+        onTap: update,
+        title: Text(
+          '显示跳过Toast',
+          style: titleStyle,
         ),
-      ));
-
-  Widget _blockTrackItem(TextStyle titleStyle, TextStyle subTitleStyle) =>
-      ListTile(
-          dense: true,
-          onTap: _updateBlockTrack,
-          title: Text(
-            '跳过次数统计跟踪',
-            style: titleStyle,
+        trailing: Transform.scale(
+          alignment: Alignment.centerRight,
+          scale: 0.8,
+          child: Switch(
+            value: _blockToast,
+            onChanged: (val) => update(),
           ),
-          subtitle: Text(
-            // from origin extension
-            '此功能追踪您跳过了哪些片段，让用户知道他们提交的片段帮助了多少人。同时点赞会作为依据，确保垃圾信息不会污染数据库。在您每次跳过片段时，我们都会向服务器发送一条消息。希望大家开启此项设置，以便得到更准确的统计数据。:)',
+        ),
+      );
+    },
+  );
+
+  Widget _blockTrackItem(
+    TextStyle titleStyle,
+    TextStyle subTitleStyle,
+  ) => Builder(
+    builder: (context) {
+      void update() {
+        _blockTrack = !_blockTrack;
+        setting.put(SettingBoxKey.blockTrack, _blockTrack);
+        (context as Element).markNeedsBuild();
+      }
+
+      return ListTile(
+        dense: true,
+        onTap: update,
+        title: Text(
+          '跳过次数统计跟踪',
+          style: titleStyle,
+        ),
+        subtitle: Text(
+          // from origin extension
+          '此功能追踪您跳过了哪些片段，让用户知道他们提交的片段帮助了多少人。同时点赞会作为依据，确保垃圾信息不会污染数据库。在您每次跳过片段时，我们都会向服务器发送一条消息。希望大家开启此项设置，以便得到更准确的统计数据。:)',
+          style: subTitleStyle,
+        ),
+        trailing: Transform.scale(
+          alignment: Alignment.centerRight,
+          scale: 0.8,
+          child: Switch(
+            value: _blockTrack,
+            onChanged: (val) => update(),
+          ),
+        ),
+      );
+    },
+  );
+
+  Widget _blockUserInfo(
+    ThemeData theme,
+    TextStyle titleStyle,
+    TextStyle subTitleStyle,
+  ) => Obx(
+    () {
+      return ListTile(
+        dense: true,
+        onTap: () {
+          _userInfo.value = LoadingState.loading();
+          _getUserInfo();
+        },
+        title: Text(
+          '您的信息',
+          style: titleStyle,
+        ),
+        subtitle: switch (_userInfo.value) {
+          Loading() => const SizedBox.shrink(),
+          Success<UserInfo>(:final response) => Text(
+            response.toString(),
             style: subTitleStyle,
           ),
-          trailing: Transform.scale(
-            alignment: Alignment.centerRight,
-            scale: 0.8,
-            child: Switch(
-              thumbIcon: WidgetStateProperty.resolveWith<Icon?>((states) {
-                if (states.isNotEmpty && states.first == WidgetState.selected) {
-                  return const Icon(Icons.done);
-                }
-                return null;
-              }),
-              value: _blockTrack,
-              onChanged: (val) {
-                _updateBlockTrack();
-              },
-            ),
-          ));
+          Error(:final errMsg) => Text(
+            errMsg ?? '服务器错误',
+            style: subTitleStyle.copyWith(color: theme.colorScheme.error),
+          ),
+        },
+      );
+    },
+  );
 
   Widget _blockServerItem(
-          ThemeData theme, TextStyle titleStyle, TextStyle subTitleStyle) =>
-      ListTile(
+    ThemeData theme,
+    TextStyle titleStyle,
+    TextStyle subTitleStyle,
+  ) => Builder(
+    builder: (context) {
+      return ListTile(
         dense: true,
         onTap: () {
           _textController.text = _blockServer;
           showDialog(
             context: context,
-            builder: (BuildContext context) {
+            builder: (_) {
               return AlertDialog(
                 title: Text('服务器地址', style: titleStyle),
                 content: TextFormField(
@@ -294,7 +335,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                       _blockServer = HttpString.sponsorBlockBaseUrl;
                       setting.put(SettingBoxKey.blockServer, _blockServer);
                       Request.accountManager.blockServer = _blockServer;
-                      setState(() {});
+                      (context as Element).markNeedsBuild();
                     },
                     child: const Text('重置'),
                   ),
@@ -313,10 +354,12 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                       _blockServer = _textController.text;
                       setting.put(SettingBoxKey.blockServer, _blockServer);
                       Request.accountManager.blockServer = _blockServer;
-                      setState(() {});
+                      _checkServerStatus();
+                      _getUserInfo();
+                      (context as Element).markNeedsBuild();
                     },
                     child: const Text('确定'),
-                  )
+                  ),
                 ],
               );
             },
@@ -331,37 +374,47 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           style: subTitleStyle,
         ),
       );
+    },
+  );
 
-  Widget _serverStatusItem(ThemeData theme, TextStyle titleStyle) => ListTile(
+  Widget _serverStatusItem(ThemeData theme, TextStyle titleStyle) => Obx(
+    () {
+      String status;
+      Color? color;
+      switch (_serverStatus.value) {
+        case null:
+          status = '——';
+        case true:
+          status = '正常';
+          color = theme.colorScheme.primary;
+        case false:
+          status = '错误';
+          color = theme.colorScheme.error;
+      }
+      return ListTile(
         dense: true,
         onTap: () {
-          setState(() {
-            _serverStatus = null;
-          });
+          _serverStatus.value = null;
           _checkServerStatus();
         },
         title: Text('服务器状态', style: titleStyle),
         trailing: Text(
-          _serverStatus == null
-              ? '——'
-              : _serverStatus == true
-                  ? '正常'
-                  : '错误',
-          style: TextStyle(
-            fontSize: 13,
-            color: _serverStatus == null
-                ? null
-                : _serverStatus == true
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.error,
-          ),
+          status,
+          style: TextStyle(fontSize: 13, color: color),
         ),
       );
+    },
+  );
 
-  void onSelectColor(int index) {
+  void onSelectColor(
+    BuildContext context,
+    int index,
+    Color color,
+    Pair<SegmentType, SkipType> item,
+  ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
         title: Text.rich(
@@ -378,28 +431,30 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                   width: 10,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _blockColor[index],
+                    color: color,
                   ),
                 ),
                 style: const TextStyle(fontSize: 13, height: 1),
               ),
               TextSpan(
-                text: ' ${_blockSettings[index].first.title}',
+                text: ' ${item.first.title}',
                 style: const TextStyle(fontSize: 13, height: 1),
               ),
             ],
           ),
         ),
         content: SlideColorPicker(
-          color: _blockColor[index],
+          color: color,
+          showResetBtn: true,
           callback: (Color? color) {
-            _blockColor[index] = color ?? _blockSettings[index].first.color;
+            _blockColor[index] = color ?? item.first.color;
             setting.put(
-                SettingBoxKey.blockColor,
-                _blockColor
-                    .map((item) => item.value.toRadixString(16).substring(2))
-                    .toList());
-            setState(() {});
+              SettingBoxKey.blockColor,
+              _blockColor
+                  .map((item) => item.toARGB32().toRadixString(16).substring(2))
+                  .toList(),
+            );
+            (context as Element).markNeedsBuild();
           },
         ),
       ),
@@ -432,6 +487,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
     );
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text('空降助手')),
       body: CustomScrollView(
         slivers: [
@@ -439,59 +495,106 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           SliverToBoxAdapter(child: _serverStatusItem(theme, titleStyle)),
           dividerL,
           SliverToBoxAdapter(
-              child: _blockLimitItem(theme, titleStyle, subTitleStyle)),
+            child: _blockLimitItem(theme, titleStyle, subTitleStyle),
+          ),
           sliverDivider,
           SliverToBoxAdapter(child: _blockToastItem(titleStyle)),
           sliverDivider,
           SliverToBoxAdapter(child: _blockTrackItem(titleStyle, subTitleStyle)),
+          sliverDivider,
+          SliverToBoxAdapter(
+            child: _blockUserInfo(theme, titleStyle, subTitleStyle),
+          ),
           dividerL,
           SliverList.separated(
             itemCount: _blockSettings.length,
-            itemBuilder: (context, index) => ListTile(
-              dense: true,
-              enabled: _blockSettings[index].second != SkipType.disable,
-              onTap: () => onSelectColor(index),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.middle,
-                          child: Container(
-                            height: 10,
-                            width: 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _blockColor[index],
-                            ),
-                          ),
-                          style: const TextStyle(fontSize: 14, height: 1),
+            itemBuilder: (context, index) =>
+                _buildItem(theme, index, _blockSettings[index]),
+            separatorBuilder: (context, index) => divider,
+          ),
+          dividerL,
+          SliverToBoxAdapter(
+            child: _userIdItem(theme, titleStyle, subTitleStyle),
+          ),
+          sliverDivider,
+          SliverToBoxAdapter(
+            child: _blockServerItem(theme, titleStyle, subTitleStyle),
+          ),
+          dividerL,
+          SliverToBoxAdapter(child: _aboutItem(titleStyle, subTitleStyle)),
+          dividerL,
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 55 + MediaQuery.viewPaddingOf(context).bottom,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItem(
+    ThemeData theme,
+    int index,
+    Pair<SegmentType, SkipType> item,
+  ) {
+    return Builder(
+      builder: (context) {
+        Color color = _blockColor[index];
+        final isDisable = item.second == SkipType.disable;
+        return ListTile(
+          dense: true,
+          enabled: item.second != SkipType.disable,
+          onTap: () => onSelectColor(context, index, color, item),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text.rich(
+                TextSpan(
+                  children: [
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: Container(
+                        height: 10,
+                        width: 10,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color,
                         ),
-                        TextSpan(
-                          text: ' ${_blockSettings[index].first.title}',
-                          style: const TextStyle(fontSize: 14, height: 1),
-                        ),
-                      ],
+                      ),
+                      style: const TextStyle(fontSize: 14, height: 1),
                     ),
-                  ),
-                  PopupMenuButton(
-                    initialValue: _blockSettings[index].second,
-                    onSelected: (item) {
-                      _blockSettings[index].second = item;
+                    TextSpan(
+                      text: ' ${item.first.title}',
+                      style: const TextStyle(fontSize: 14, height: 1),
+                    ),
+                  ],
+                ),
+              ),
+              Builder(
+                builder: (btnContext) {
+                  return PopupMenuButton<SkipType>(
+                    initialValue: item.second,
+                    onSelected: (e) {
+                      final updateItem = isDisable || e == SkipType.disable;
+                      item.second = e;
                       setting.put(
-                          SettingBoxKey.blockSettings,
-                          _blockSettings
-                              .map((item) => item.second.index)
-                              .toList());
-                      setState(() {});
+                        SettingBoxKey.blockSettings,
+                        _blockSettings.map((e) => e.second.index).toList(),
+                      );
+                      if (updateItem) {
+                        (context as Element).markNeedsBuild();
+                      } else {
+                        (btnContext as Element).markNeedsBuild();
+                      }
                     },
                     itemBuilder: (context) => SkipType.values
-                        .map((item) => PopupMenuItem<SkipType>(
-                              value: item,
-                              child: Text(item.title),
-                            ))
+                        .map(
+                          (item) => PopupMenuItem<SkipType>(
+                            value: item,
+                            child: Text(item.title),
+                          ),
+                        )
                         .toList(),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -499,14 +602,14 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            _blockSettings[index].second.title,
+                            item.second.title,
                             style: TextStyle(
                               height: 1,
                               fontSize: 14,
-                              color: _blockSettings[index].second ==
-                                      SkipType.disable
-                                  ? theme.colorScheme.outline
-                                      .withValues(alpha: 0.7)
+                              color: isDisable
+                                  ? theme.colorScheme.outline.withValues(
+                                      alpha: 0.7,
+                                    )
                                   : theme.colorScheme.secondary,
                             ),
                             strutStyle: const StrutStyle(height: 1, leading: 0),
@@ -514,45 +617,29 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                           Icon(
                             MdiIcons.unfoldMoreHorizontal,
                             size: MediaQuery.textScalerOf(context).scale(14),
-                            color:
-                                _blockSettings[index].second == SkipType.disable
-                                    ? theme.colorScheme.outline
-                                        .withValues(alpha: 0.7)
-                                    : theme.colorScheme.secondary,
+                            color: isDisable
+                                ? theme.colorScheme.outline.withValues(
+                                    alpha: 0.7,
+                                  )
+                                : theme.colorScheme.secondary,
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
-              subtitle: Text(
-                _blockSettings[index].first.description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _blockSettings[index].second == SkipType.disable
-                      ? null
-                      : theme.colorScheme.outline,
-                ),
-              ),
-            ),
-            separatorBuilder: (context, index) => divider,
+            ],
           ),
-          dividerL,
-          SliverToBoxAdapter(
-              child: _userIdItem(theme, titleStyle, subTitleStyle)),
-          sliverDivider,
-          SliverToBoxAdapter(
-              child: _blockServerItem(theme, titleStyle, subTitleStyle)),
-          dividerL,
-          SliverToBoxAdapter(child: _aboudItem(titleStyle, subTitleStyle)),
-          dividerL,
-          SliverToBoxAdapter(
-              child: SizedBox(
-            height: 55 + MediaQuery.paddingOf(context).bottom,
-          )),
-        ],
-      ),
+          subtitle: Text(
+            item.first.description,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDisable ? null : theme.colorScheme.outline,
+            ),
+          ),
+        );
+      },
     );
   }
 }

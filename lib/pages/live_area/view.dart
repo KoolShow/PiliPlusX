@@ -29,10 +29,12 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final padding = MediaQuery.viewPaddingOf(context);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('全部标签'),
-        actions: _controller.accountService.isLogin.value
+        actions: _controller.isLogin
             ? [
                 TextButton(
                   onPressed: _controller.onEdit,
@@ -40,23 +42,28 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
                     visualDensity: VisualDensity.compact,
                   ),
                   child: Obx(
-                      () => Text(_controller.isEditing.value ? '完成' : '编辑')),
+                    () => Text(_controller.isEditing.value ? '完成' : '编辑'),
+                  ),
                 ),
                 const SizedBox(width: 16),
               ]
             : null,
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
+      body: Padding(
+        padding: EdgeInsets.only(left: padding.left, right: padding.right),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_controller.accountService.isLogin.value)
+            if (_controller.isLogin)
               Obx(() => _buildFavWidget(theme, _controller.favState.value)),
             Expanded(
-              child:
-                  Obx(() => _buildBody(theme, _controller.loadingState.value)),
+              child: Obx(
+                () => _buildBody(
+                  theme,
+                  padding.bottom,
+                  _controller.loadingState.value,
+                ),
+              ),
             ),
           ],
         ),
@@ -65,22 +72,26 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
   }
 
   Widget _buildBody(
-      ThemeData theme, LoadingState<List<AreaList>?> loadingState) {
+    ThemeData theme,
+    double bottom,
+    LoadingState<List<AreaList>?> loadingState,
+  ) {
     return switch (loadingState) {
       Loading() => const SizedBox.shrink(),
-      Success(:var response) => response?.isNotEmpty == true
-          ? DefaultTabController(
-              length: response!.length,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    tabs: response.map((e) => Tab(text: e.name)).toList(),
-                  ),
-                  Expanded(
-                    child: tabBarView(
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? DefaultTabController(
+                length: response.length,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      tabs: response.map((e) => Tab(text: e.name)).toList(),
+                    ),
+                    Expanded(
+                      child: tabBarView(
                         children: response
                             .map(
                               (e) => KeepAliveWrapper(
@@ -91,17 +102,15 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
                                   return GridView.builder(
                                     padding: EdgeInsets.only(
                                       top: 12,
-                                      bottom:
-                                          MediaQuery.paddingOf(context).bottom +
-                                              80,
+                                      bottom: bottom + 100,
                                     ),
                                     gridDelegate:
                                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                                      maxCrossAxisExtent: 100,
-                                      mainAxisSpacing: 10,
-                                      crossAxisSpacing: 10,
-                                      mainAxisExtent: 80,
-                                    ),
+                                          maxCrossAxisExtent: 100,
+                                          mainAxisSpacing: 10,
+                                          crossAxisSpacing: 10,
+                                          mainAxisExtent: 80,
+                                        ),
                                     itemCount: e.areaList!.length,
                                     itemBuilder: (context, index) {
                                       final item = e.areaList![index];
@@ -110,21 +119,27 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
                                         item: item,
                                         onPressed: () {
                                           // success
-                                          if (item.isFav == true) {
+                                          bool? isFav =
+                                              _controller.favInfo[item.id];
+                                          if (isFav == true) {
+                                            _controller.favInfo[item.id] =
+                                                false;
                                             _controller.favState
                                               ..value.data.remove(item)
                                               ..refresh();
-                                            item.isFav = false;
                                             (context as Element)
                                                 .markNeedsBuild();
                                           } else {
                                             // check
                                             if (_controller
-                                                .favState.value.isSuccess) {
+                                                .favState
+                                                .value
+                                                .isSuccess) {
+                                              _controller.favInfo[item.id] =
+                                                  true;
                                               _controller.favState
                                                 ..value.data.add(item)
                                                 ..refresh();
-                                              item.isFav = true;
                                               (context as Element)
                                                   .markNeedsBuild();
                                             }
@@ -136,21 +151,24 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
                                 },
                               ),
                             )
-                            .toList()),
-                  )
-                ],
-              ),
-            )
-          : scrollErrorWidget(onReload: _controller.onReload),
+                            .toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : scrollErrorWidget(onReload: _controller.onReload),
       Error(:var errMsg) => scrollErrorWidget(
-          errMsg: errMsg,
-          onReload: _controller.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _controller.onReload,
+      ),
     };
   }
 
   Widget _buildFavWidget(
-      ThemeData theme, LoadingState<List<AreaItem>?> loadingState) {
+    ThemeData theme,
+    LoadingState<List<AreaItem>?> loadingState,
+  ) {
     if (loadingState.isSuccess) {
       final List<AreaItem>? list = loadingState.data;
       return Padding(
@@ -173,7 +191,7 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
               ),
             ),
             const SizedBox(height: 8),
-            if (list?.isNotEmpty == true) ...[
+            if (list != null && list.isNotEmpty) ...[
               SortableWrap(
                 onSortStart: (index) {
                   _controller.isEditing.value = true;
@@ -183,33 +201,16 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
                 },
                 spacing: 12,
                 runSpacing: 8,
-                children: list!
+                children: list
                     .map(
                       (item) => _favTagItem(
                         theme: theme,
                         item: item,
                         onPressed: () {
                           list.remove(item);
-                          _controller.favState.refresh();
-
-                          // update isFav
-                          if (_controller.loadingState.value.isSuccess) {
-                            List<AreaList>? areaList =
-                                _controller.loadingState.value.data;
-                            if (areaList?.isNotEmpty == true) {
-                              for (var i in areaList!) {
-                                if (i.areaList?.isNotEmpty == true) {
-                                  for (var j in i.areaList!) {
-                                    if (j == item) {
-                                      j.isFav = false;
-                                      _controller.loadingState.refresh();
-                                      break;
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
+                          _controller
+                            ..favInfo[item.id] = false
+                            ..favState.refresh();
                         },
                       ),
                     )
@@ -277,26 +278,24 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
               child: Obx(() {
                 if (_controller.isEditing.value &&
                     _controller.favState.value.isSuccess) {
-                  // init isFav
-                  item.isFav ??= _controller.favState.value.data.contains(item);
-
-                  return Builder(
-                    builder: (context) {
-                      return iconButton(
-                        size: 17,
-                        iconSize: 13,
-                        context: context,
-                        icon:
-                            item.isFav == true ? MdiIcons.check : MdiIcons.plus,
-                        bgColor: item.isFav == true
-                            ? theme.colorScheme.onInverseSurface
-                            : null,
-                        iconColor: item.isFav == true
-                            ? theme.colorScheme.outline
-                            : null,
-                        onPressed: onPressed,
-                      );
-                    },
+                  bool? isFav = _controller.favInfo[item.id];
+                  if (isFav == null) {
+                    isFav = _controller.favState.value.data.contains(item);
+                    _controller.favInfo[item.id] = isFav;
+                  }
+                  return iconButton(
+                    size: 17,
+                    iconSize: 13,
+                    icon: isFav
+                        ? const Icon(MdiIcons.check)
+                        : const Icon(MdiIcons.plus),
+                    bgColor: isFav
+                        ? theme.colorScheme.onInverseSurface
+                        : theme.colorScheme.secondaryContainer,
+                    iconColor: isFav
+                        ? theme.colorScheme.outline
+                        : theme.colorScheme.onSecondaryContainer,
+                    onPressed: onPressed,
                   );
                 }
                 return const SizedBox.shrink();
@@ -356,8 +355,7 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
               return iconButton(
                 size: 16,
                 iconSize: 12,
-                context: context,
-                icon: Icons.horizontal_rule,
+                icon: const Icon(Icons.horizontal_rule),
                 bgColor: isDark
                     ? theme.colorScheme.error
                     : theme.colorScheme.errorContainer,
@@ -369,7 +367,7 @@ class _LiveAreaPageState extends State<LiveAreaPage> {
             }
             return const SizedBox.shrink();
           }),
-        )
+        ),
       ],
     );
   }

@@ -1,39 +1,42 @@
+import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:flutter/material.dart';
 
 class AppBarAni extends StatelessWidget {
   const AppBarAni({
+    super.key,
     required this.child,
     required this.controller,
-    required this.visible,
-    this.position,
-    super.key,
+    required this.isTop,
+    required this.isFullScreen,
   });
 
   final Widget child;
   final AnimationController controller;
-  final bool visible;
-  final String? position;
+  final bool isTop;
+  final bool isFullScreen;
 
   @override
   Widget build(BuildContext context) {
-    visible ? controller.forward() : controller.reverse();
     return SlideTransition(
-      position: Tween<Offset>(
-        begin: Offset(0, position! == 'top' ? -1 : 1.1),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: controller,
-        curve: Curves.linear,
-      )),
+      position:
+          Tween<Offset>(
+            begin: isTop ? const Offset(0, -1) : const Offset(0, 1.2),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: controller,
+              curve: Curves.linear,
+            ),
+          ),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: position! == 'top'
+          gradient: isTop
               ? const LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: <Color>[
                     Colors.transparent,
-                    Colors.black54,
+                    Color(0xBF000000),
                   ],
                   tileMode: TileMode.mirror,
                 )
@@ -42,12 +45,16 @@ class AppBarAni extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: <Color>[
                     Colors.transparent,
-                    Colors.black54,
+                    Color(0xBF000000),
                   ],
                   tileMode: TileMode.mirror,
                 ),
         ),
-        child: SafeArea(bottom: false, child: child),
+        child: ViewSafeArea(
+          left: isFullScreen,
+          right: isFullScreen,
+          child: child,
+        ),
       ),
     );
   }

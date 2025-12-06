@@ -1,72 +1,79 @@
 import 'dart:io';
 
+import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/widgets/flutter/tabs.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/tabs.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamic_badge_mode.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
-import 'package:PiliPlus/pages/dynamics/controller.dart';
-import 'package:PiliPlus/pages/dynamics/view.dart';
-import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/event_bus.dart';
+import 'package:PiliPlus/utils/context_ext.dart';
 import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide ContextExtensionss;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:stream_transform/stream_transform.dart';
+import 'package:tray_manager/tray_manager.dart';
+import 'package:window_manager/window_manager.dart';
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
 
   @override
   State<MainApp> createState() => _MainAppState();
-
-  static final RouteObserver<PageRoute> routeObserver =
-      RouteObserver<PageRoute>();
 }
 
 class _MainAppState extends State<MainApp>
-    with RouteAware, WidgetsBindingObserver {
+    with RouteAware, WidgetsBindingObserver, WindowListener, TrayListener {
   final MainController _mainController = Get.put(MainController());
-  late final _homeController = Get.put(HomeController());
-  late final _dynamicController = Get.put(DynamicsController());
-
-  late int _lastSelectTime = 0;
-  late bool enableMYBar;
-  late bool useSideBar;
+  late final _setting = GStorage.setting;
 
   @override
   void initState() {
     super.initState();
-    _lastSelectTime = DateTime.now().millisecondsSinceEpoch;
-    enableMYBar =
-        GStorage.setting.get(SettingBoxKey.enableMYBar, defaultValue: true);
-    useSideBar =
-        GStorage.setting.get(SettingBoxKey.useSideBar, defaultValue: false);
     WidgetsBinding.instance.addObserver(this);
+    if (Utils.isDesktop) {
+      windowManager
+        ..addListener(this)
+        ..setPreventClose(true);
+      if (_mainController.showTrayIcon) {
+        trayManager.addListener(this);
+        _handleTray();
+      }
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    MainApp.routeObserver.subscribe(this, ModalRoute.of(context) as PageRoute);
+    final brightness = Theme.brightnessOf(context);
+    NetworkImgLayer.reduce =
+        NetworkImgLayer.reduceLuxColor != null && brightness.isDark;
+    if (Utils.isDesktop) {
+      windowManager.setBrightness(brightness);
+    }
+    PageUtils.routeObserver.subscribe(
+      this,
+      ModalRoute.of(context) as PageRoute,
+    );
   }
 
   @override
   void didPopNext() {
     WidgetsBinding.instance.addObserver(this);
-    _mainController.checkUnreadDynamic();
-    _checkDefaultSearch(true);
-    _checkUnread(context.orientation == Orientation.portrait);
+    _mainController
+      ..checkUnreadDynamic()
+      ..checkDefaultSearch(true)
+      ..checkUnread(useBottomNav);
     super.didPopNext();
   }
 
@@ -79,111 +86,221 @@ class _MainAppState extends State<MainApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _mainController.checkUnreadDynamic();
-      _checkDefaultSearch(true);
-      _checkUnread(context.orientation == Orientation.portrait);
-    }
-  }
-
-  void _checkDefaultSearch([bool shouldCheck = false]) {
-    if (_mainController.homeIndex != -1 && _homeController.enableSearchWord) {
-      if (shouldCheck &&
-          _mainController.navigationBars[_mainController.selectedIndex.value] !=
-              NavigationBarType.home) {
-        return;
-      }
-      int now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _homeController.lateCheckSearchAt >= 5 * 60 * 1000) {
-        _homeController
-          ..lateCheckSearchAt = now
-          ..querySearchDefault();
-      }
-    }
-  }
-
-  void _checkUnread([bool shouldCheck = false]) {
-    if (_mainController.accountService.isLogin.value &&
-        _mainController.homeIndex != -1 &&
-        _mainController.msgBadgeMode != DynamicBadgeMode.hidden) {
-      if (shouldCheck &&
-          _mainController.navigationBars[_mainController.selectedIndex.value] !=
-              NavigationBarType.home) {
-        return;
-      }
-      int now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _mainController.lastCheckUnreadAt >= 5 * 60 * 1000) {
-        _mainController
-          ..lastCheckUnreadAt = now
-          ..queryUnreadMsg();
-      }
-    }
-  }
-
-  void setIndex(int value) {
-    feedBack();
-
-    final currentPage = _mainController.navigationBars[value].page;
-    if (value != _mainController.selectedIndex.value) {
-      _mainController.selectedIndex.value = value;
-      if (_mainController.mainTabBarView) {
-        _mainController.controller.animateTo(value);
-      } else {
-        _mainController.controller.jumpToPage(value);
-      }
-      if (currentPage is HomePage) {
-        _checkDefaultSearch();
-        _checkUnread();
-      } else if (currentPage is DynamicsPage) {
-        _mainController.setCount();
-      }
-    } else {
-      int now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastSelectTime < 500) {
-        EasyThrottle.throttle('topOrRefresh', const Duration(milliseconds: 500),
-            () {
-          if (currentPage is HomePage) {
-            _homeController.onRefresh();
-          } else if (currentPage is DynamicsPage) {
-            _dynamicController.onRefresh();
-          }
-        });
-      } else {
-        if (currentPage is HomePage) {
-          _homeController.toTopOrRefresh();
-        } else if (currentPage is DynamicsPage) {
-          _dynamicController.toTopOrRefresh();
-        }
-      }
-      _lastSelectTime = now;
+      _mainController
+        ..checkUnreadDynamic()
+        ..checkDefaultSearch(true)
+        ..checkUnread(useBottomNav);
     }
   }
 
   @override
   void dispose() {
-    MainApp.routeObserver.unsubscribe(this);
+    if (Utils.isDesktop) {
+      trayManager.removeListener(this);
+      windowManager.removeListener(this);
+    }
+    PageUtils.routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    GStorage.close();
-    EventBus().off(EventName.loginEvent);
     PiliScheme.listener?.cancel();
+    GStorage.close();
     super.dispose();
   }
 
   @override
+  void onWindowMaximize() {
+    _setting.put(SettingBoxKey.isWindowMaximized, true);
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    _setting.put(SettingBoxKey.isWindowMaximized, false);
+  }
+
+  @override
+  Future<void> onWindowMoved() async {
+    final Offset offset = await windowManager.getPosition();
+    _setting.put(SettingBoxKey.windowPosition, [offset.dx, offset.dy]);
+  }
+
+  @override
+  Future<void> onWindowResized() async {
+    final Rect bounds = await windowManager.getBounds();
+    _setting.putAll({
+      SettingBoxKey.windowSize: [bounds.width, bounds.height],
+      SettingBoxKey.windowPosition: [bounds.left, bounds.top],
+    });
+  }
+
+  @override
+  void onWindowClose() {
+    if (_mainController.showTrayIcon && _mainController.minimizeOnExit) {
+      windowManager.hide();
+      _onHideWindow();
+    } else {
+      _onClose();
+    }
+  }
+
+  Future<void> _onClose() async {
+    await GStorage.compact();
+    await GStorage.close();
+    await trayManager.destroy();
+    if (Platform.isWindows) {
+      const MethodChannel('window_control').invokeMethod('closeWindow');
+    } else {
+      exit(0);
+    }
+  }
+
+  @override
+  void onWindowMinimize() {
+    _onHideWindow();
+  }
+
+  @override
+  void onWindowRestore() {
+    _onShowWindow();
+  }
+
+  void _onHideWindow() {
+    if (_mainController.pauseOnMinimize) {
+      _mainController.isPlaying =
+          PlPlayerController.instance?.playerStatus.value ==
+          PlayerStatus.playing;
+      PlPlayerController.pauseIfExists();
+    }
+  }
+
+  void _onShowWindow() {
+    if (_mainController.pauseOnMinimize) {
+      if (_mainController.isPlaying) {
+        PlPlayerController.playIfExists();
+      }
+    }
+  }
+
+  @override
+  Future<void> onTrayIconMouseDown() async {
+    if (await windowManager.isVisible()) {
+      _onHideWindow();
+      windowManager.hide();
+    } else {
+      _onShowWindow();
+      windowManager.show();
+    }
+  }
+
+  @override
+  Future<void> onTrayIconRightMouseDown() async {
+    // ignore: deprecated_member_use
+    trayManager.popUpContextMenu(bringAppToFront: true);
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) {
+    switch (menuItem.key) {
+      case 'show':
+        windowManager.show();
+      case 'exit':
+        _onClose();
+    }
+  }
+
+  Future<void> _handleTray() async {
+    if (Platform.isWindows) {
+      await trayManager.setIcon('assets/images/logo/app_icon.ico');
+    } else {
+      await trayManager.setIcon('assets/images/logo/logo_large.png');
+    }
+    if (!Platform.isLinux) {
+      await trayManager.setToolTip(Constants.appName);
+    }
+
+    Menu trayMenu = Menu(
+      items: [
+        MenuItem(key: 'show', label: '显示窗口'),
+        MenuItem.separator(),
+        MenuItem(key: 'exit', label: '退出 ${Constants.appName}'),
+      ],
+    );
+    await trayManager.setContextMenu(trayMenu);
+  }
+
+  void onBack() {
+    if (Platform.isAndroid) {
+      Utils.channel.invokeMethod('back');
+    } else {
+      SystemNavigator.pop();
+    }
+  }
+
+  late bool useBottomNav;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bool isPortrait = context.orientation == Orientation.portrait;
+    final padding = MediaQuery.viewPaddingOf(context);
+    useBottomNav =
+        !_mainController.useSideBar && MediaQuery.sizeOf(context).isPortrait;
+    Widget? bottomNav = useBottomNav
+        ? _mainController.navigationBars.length > 1
+              ? _mainController.enableMYBar
+                    ? Obx(
+                        () => NavigationBar(
+                          maintainBottomViewPadding: true,
+                          onDestinationSelected: _mainController.setIndex,
+                          selectedIndex: _mainController.selectedIndex.value,
+                          destinations: _mainController.navigationBars
+                              .map(
+                                (e) => NavigationDestination(
+                                  label: e.label,
+                                  icon: _buildIcon(type: e),
+                                  selectedIcon: _buildIcon(
+                                    type: e,
+                                    selected: true,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      )
+                    : Obx(
+                        () => BottomNavigationBar(
+                          currentIndex: _mainController.selectedIndex.value,
+                          onTap: _mainController.setIndex,
+                          iconSize: 16,
+                          selectedFontSize: 12,
+                          unselectedFontSize: 12,
+                          type: BottomNavigationBarType.fixed,
+                          items: _mainController.navigationBars
+                              .map(
+                                (e) => BottomNavigationBarItem(
+                                  label: e.label,
+                                  icon: _buildIcon(type: e),
+                                  activeIcon: _buildIcon(
+                                    type: e,
+                                    selected: true,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      )
+              : const SizedBox.shrink()
+        : null;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
-        if (_mainController.selectedIndex.value != 0) {
-          setIndex(0);
-          _mainController.bottomBarStream?.add(true);
-          _homeController.searchBarStream?.add(true);
+        if (_mainController.directExitOnBack) {
+          onBack();
         } else {
-          if (Platform.isAndroid) {
-            Utils.channel.invokeMethod('back');
+          if (_mainController.selectedIndex.value != 0) {
+            _mainController
+              ..setIndex(0)
+              ..bottomBarStream?.add(true)
+              ..setSearchBar();
           } else {
-            SystemNavigator.pop();
+            onBack();
           }
         }
       },
@@ -194,76 +311,92 @@ class _MainAppState extends State<MainApp>
         ),
         child: Scaffold(
           extendBody: true,
+          resizeToAvoidBottomInset: false,
           appBar: AppBar(toolbarHeight: 0),
-          body: SafeArea(
-            bottom: false,
+          body: Padding(
+            padding: EdgeInsets.only(
+              left: useBottomNav ? padding.left : 0.0,
+              right: padding.right,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (useSideBar || !isPortrait) ...[
+                if (!useBottomNav) ...[
                   _mainController.navigationBars.length > 1
-                      ? context.isTablet && GStorage.optTabletNav
-                          ? Column(
-                              children: [
-                                const SizedBox(height: 25),
-                                userAndSearchVertical(theme),
-                                const Spacer(flex: 2),
-                                Expanded(
-                                  flex: 5,
-                                  child: SizedBox(
-                                    width: 130,
-                                    child: Obx(
-                                      () => NavigationDrawer(
-                                        backgroundColor: Colors.transparent,
-                                        tilePadding: const EdgeInsets.symmetric(
-                                            vertical: 5, horizontal: 12),
-                                        indicatorShape:
-                                            const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(16),
-                                          ),
-                                        ),
-                                        onDestinationSelected: setIndex,
-                                        selectedIndex:
-                                            _mainController.selectedIndex.value,
-                                        children: _mainController.navigationBars
-                                            .map(
-                                              (e) =>
-                                                  NavigationDrawerDestination(
+                      ? context.isTablet && _mainController.optTabletNav
+                            ? Column(
+                                children: [
+                                  const SizedBox(height: 25),
+                                  userAndSearchVertical(theme),
+                                  const Spacer(flex: 2),
+                                  Expanded(
+                                    flex: 5,
+                                    child: SizedBox(
+                                      width: 130,
+                                      child: Obx(
+                                        () => NavigationDrawer(
+                                          backgroundColor: Colors.transparent,
+                                          tilePadding:
+                                              const EdgeInsets.symmetric(
+                                                vertical: 5,
+                                                horizontal: 12,
+                                              ),
+                                          indicatorShape:
+                                              const RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.all(
+                                                  Radius.circular(16),
+                                                ),
+                                              ),
+                                          onDestinationSelected:
+                                              _mainController.setIndex,
+                                          selectedIndex: _mainController
+                                              .selectedIndex
+                                              .value,
+                                          children: _mainController
+                                              .navigationBars
+                                              .map(
+                                                (e) =>
+                                                    NavigationDrawerDestination(
                                                       label: Text(e.label),
-                                                      icon: _buildIcon(type: e),
+                                                      icon: _buildIcon(
+                                                        type: e,
+                                                      ),
                                                       selectedIcon: _buildIcon(
                                                         type: e,
                                                         selected: true,
-                                                      )),
-                                            )
-                                            .toList(),
+                                                      ),
+                                                    ),
+                                              )
+                                              .toList(),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            )
-                          : Obx(
-                              () => NavigationRail(
-                                groupAlignment: 0.5,
-                                selectedIndex:
-                                    _mainController.selectedIndex.value,
-                                onDestinationSelected: setIndex,
-                                labelType: NavigationRailLabelType.selected,
-                                leading: userAndSearchVertical(theme),
-                                destinations: _mainController.navigationBars
-                                    .map((e) => NavigationRailDestination(
+                                ],
+                              )
+                            : Obx(
+                                () => NavigationRail(
+                                  groupAlignment: 0.5,
+                                  selectedIndex:
+                                      _mainController.selectedIndex.value,
+                                  onDestinationSelected:
+                                      _mainController.setIndex,
+                                  labelType: NavigationRailLabelType.selected,
+                                  leading: userAndSearchVertical(theme),
+                                  destinations: _mainController.navigationBars
+                                      .map(
+                                        (e) => NavigationRailDestination(
                                           label: Text(e.label),
                                           icon: _buildIcon(type: e),
                                           selectedIcon: _buildIcon(
                                             type: e,
                                             selected: true,
                                           ),
-                                        ))
-                                    .toList(),
-                              ),
-                            )
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              )
                       : Container(
                           padding: const EdgeInsets.only(top: 10),
                           width: 80,
@@ -271,15 +404,16 @@ class _MainAppState extends State<MainApp>
                         ),
                   VerticalDivider(
                     width: 1,
-                    endIndent: MediaQuery.paddingOf(context).bottom,
+                    endIndent: padding.bottom,
                     color: theme.colorScheme.outline.withValues(alpha: 0.06),
                   ),
                 ],
                 Expanded(
                   child: _mainController.mainTabBarView
                       ? CustomTabBarView(
-                          scrollDirection:
-                              isPortrait ? Axis.horizontal : Axis.vertical,
+                          scrollDirection: useBottomNav
+                              ? Axis.horizontal
+                              : Axis.vertical,
                           physics: const NeverScrollableScrollPhysics(),
                           controller: _mainController.controller,
                           children: _mainController.navigationBars
@@ -297,66 +431,23 @@ class _MainAppState extends State<MainApp>
               ],
             ),
           ),
-          bottomNavigationBar: useSideBar || !isPortrait
-              ? null
-              : StreamBuilder(
-                  stream: _mainController.hideTabBar
-                      ? _mainController.navSearchStreamDebounce
-                          ? _mainController.bottomBarStream?.stream
-                              .distinct()
-                              .throttle(const Duration(milliseconds: 500))
-                          : _mainController.bottomBarStream?.stream.distinct()
-                      : null,
-                  initialData: true,
-                  builder: (context, AsyncSnapshot snapshot) {
-                    return AnimatedSlide(
-                      curve: Curves.easeInOutCubicEmphasized,
-                      duration: const Duration(milliseconds: 500),
-                      offset: Offset(0, snapshot.data ? 0 : 1),
-                      child: enableMYBar
-                          ? _mainController.navigationBars.length > 1
-                              ? Obx(
-                                  () => NavigationBar(
-                                    onDestinationSelected: setIndex,
-                                    selectedIndex:
-                                        _mainController.selectedIndex.value,
-                                    destinations: _mainController.navigationBars
-                                        .map((e) => NavigationDestination(
-                                            label: e.label,
-                                            icon: _buildIcon(type: e),
-                                            selectedIcon: _buildIcon(
-                                              type: e,
-                                              selected: true,
-                                            )))
-                                        .toList(),
-                                  ),
-                                )
-                              : const SizedBox.shrink()
-                          : _mainController.navigationBars.length > 1
-                              ? Obx(
-                                  () => BottomNavigationBar(
-                                    currentIndex:
-                                        _mainController.selectedIndex.value,
-                                    onTap: setIndex,
-                                    iconSize: 16,
-                                    selectedFontSize: 12,
-                                    unselectedFontSize: 12,
-                                    type: BottomNavigationBarType.fixed,
-                                    items: _mainController.navigationBars
-                                        .map((e) => BottomNavigationBarItem(
-                                            label: e.label,
-                                            icon: _buildIcon(type: e),
-                                            activeIcon: _buildIcon(
-                                              type: e,
-                                              selected: true,
-                                            )))
-                                        .toList(),
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
-                    );
-                  },
-                ),
+          bottomNavigationBar: useBottomNav
+              ? _mainController.hideTabBar
+                    ? StreamBuilder(
+                        stream: _mainController.bottomBarStream?.stream
+                            .distinct(),
+                        initialData: true,
+                        builder: (context, AsyncSnapshot snapshot) {
+                          return AnimatedSlide(
+                            curve: Curves.easeInOutCubicEmphasized,
+                            duration: const Duration(milliseconds: 500),
+                            offset: Offset(0, snapshot.data ? 0 : 1),
+                            child: bottomNav,
+                          );
+                        },
+                      )
+                    : bottomNav
+              : null,
         ),
       ),
     );
@@ -369,14 +460,18 @@ class _MainAppState extends State<MainApp>
     final icon = selected ? type.selectIcon : type.icon;
     return type == NavigationBarType.dynamics
         ? Obx(
-            () => Badge(
-              isLabelVisible: _mainController.dynCount.value > 0,
-              label: _mainController.dynamicBadgeMode == DynamicBadgeMode.number
-                  ? Text(_mainController.dynCount.value.toString())
-                  : null,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: icon,
-            ),
+            () {
+              final dynCount = _mainController.dynCount.value;
+              return Badge(
+                isLabelVisible: dynCount > 0,
+                label:
+                    _mainController.dynamicBadgeMode == DynamicBadgeMode.number
+                    ? Text(dynCount.toString())
+                    : null,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: icon,
+              );
+            },
           )
         : icon;
   }
@@ -399,10 +494,9 @@ class _MainAppState extends State<MainApp>
                       ),
                       Positioned.fill(
                         child: Material(
-                          color: Colors.transparent,
+                          type: MaterialType.transparency,
                           child: InkWell(
-                            onTap: () =>
-                                _homeController.showUserInfoDialog(context),
+                            onTap: _mainController.toMinePage,
                             splashColor: theme.colorScheme.primaryContainer
                                 .withValues(alpha: 0.3),
                             customBorder: const CircleBorder(),
@@ -412,30 +506,33 @@ class _MainAppState extends State<MainApp>
                       Positioned(
                         right: -6,
                         bottom: -6,
-                        child: Obx(() => MineController.anonymity.value
-                            ? IgnorePointer(
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.secondaryContainer,
-                                    shape: BoxShape.circle,
+                        child: Obx(
+                          () => MineController.anonymity.value
+                              ? IgnorePointer(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          theme.colorScheme.secondaryContainer,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      size: 16,
+                                      MdiIcons.incognito,
+                                      color: theme
+                                          .colorScheme
+                                          .onSecondaryContainer,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    size: 16,
-                                    MdiIcons.incognito,
-                                    color:
-                                        theme.colorScheme.onSecondaryContainer,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink()),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ),
                     ],
                   )
                 : defaultUser(
                     theme: theme,
-                    onPressed: () =>
-                        _homeController.showUserInfoDialog(context),
+                    onPressed: _mainController.toMinePage,
                   ),
           ),
         ),

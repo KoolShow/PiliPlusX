@@ -6,8 +6,10 @@ import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 
+// TODO refa
 class PagesPanel extends StatefulWidget {
   const PagesPanel({
     super.key,
@@ -16,7 +18,9 @@ class PagesPanel extends StatefulWidget {
     required this.bvid,
     required this.heroTag,
     this.showEpisodes,
-    required this.videoIntroController,
+    required this.ugcIntroController,
+    this.onDownload,
+    this.cidSet,
   });
 
   final List<Part>? list;
@@ -25,7 +29,10 @@ class PagesPanel extends StatefulWidget {
   final String bvid;
   final String heroTag;
   final Function? showEpisodes;
-  final VideoIntroController videoIntroController;
+  final UgcIntroController ugcIntroController;
+
+  final Set<int>? cidSet;
+  final bool Function(Part part)? onDownload;
 
   @override
   State<PagesPanel> createState() => _PagesPanelState();
@@ -34,42 +41,48 @@ class PagesPanel extends StatefulWidget {
 class _PagesPanelState extends State<PagesPanel> {
   late int cid;
   int pageIndex = -1;
-  late VideoDetailController _videoDetailController;
-  final ScrollController _scrollController = ScrollController();
+  late final VideoDetailController _videoDetailController;
+  late final ScrollController _scrollController;
   StreamSubscription? _listener;
 
   List<Part> get pages =>
-      widget.list ?? widget.videoIntroController.videoDetail.value.pages!;
+      widget.list ?? widget.ugcIntroController.videoDetail.value.pages!;
 
   @override
   void initState() {
     super.initState();
-    _videoDetailController =
-        Get.find<VideoDetailController>(tag: widget.heroTag);
+    _videoDetailController = Get.find<VideoDetailController>(
+      tag: widget.heroTag,
+    );
+    double offset = 0;
     if (widget.list == null) {
-      cid = widget.videoIntroController.lastPlayCid.value;
+      cid = widget.ugcIntroController.cid.value;
       pageIndex = pages.indexWhere((Part e) => e.cid == cid);
-      _listener = _videoDetailController.cid.listen((int cid) {
+      offset = targetOffset;
+      _listener = _videoDetailController.cid.listen((cid) {
         this.cid = cid;
-        pageIndex = max(0, pages.indexWhere((Part e) => e.cid == cid));
+        pageIndex = max(0, pages.indexWhere((e) => e.cid == cid));
         if (!mounted) return;
         setState(() {});
         jumpToCurr();
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        jumpToCurr();
-      });
     }
+    _scrollController = ScrollController(initialScrollOffset: offset);
+  }
+
+  double get targetOffset {
+    const double itemWidth = 150;
+    return max(0, pageIndex * itemWidth - itemWidth / 2);
   }
 
   void jumpToCurr() {
     if (!_scrollController.hasClients || pages.isEmpty) {
       return;
     }
-    const double itemWidth = 150;
-    final double targetOffset = (pageIndex * itemWidth - itemWidth / 2).clamp(
-        _scrollController.position.minScrollExtent,
-        _scrollController.position.maxScrollExtent);
+    final double targetOffset = this.targetOffset.clamp(
+      _scrollController.position.minScrollExtent,
+      _scrollController.position.maxScrollExtent,
+    );
     _scrollController.animateTo(
       targetOffset,
       duration: const Duration(milliseconds: 300),
@@ -98,7 +111,7 @@ class _PagesPanelState extends State<PagesPanel> {
                 const Text('视频选集 '),
                 Expanded(
                   child: Text(
-                    ' 正在播放：${pages[pageIndex].pagePart}',
+                    ' 正在播放：${pages[pageIndex].part}',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
@@ -110,8 +123,8 @@ class _PagesPanelState extends State<PagesPanel> {
                 SizedBox(
                   height: 34,
                   child: TextButton(
-                    style: ButtonStyle(
-                      padding: WidgetStateProperty.all(EdgeInsets.zero),
+                    style: const ButtonStyle(
+                      padding: WidgetStatePropertyAll(EdgeInsets.zero),
                     ),
                     onPressed: () => widget.showEpisodes!(
                       null,
@@ -133,43 +146,52 @@ class _PagesPanelState extends State<PagesPanel> {
         SizedBox(
           height: 35,
           child: ListView.builder(
+            key: PageStorageKey(widget.bvid),
             controller: _scrollController,
             scrollDirection: Axis.horizontal,
             itemCount: pages.length,
             itemExtent: 150,
+            padding: EdgeInsets.zero,
             itemBuilder: (BuildContext context, int i) {
               bool isCurrentIndex = pageIndex == i;
+              final item = pages[i];
               return Container(
                 width: 150,
-                margin: EdgeInsets.only(
-                  right: i != pages.length - 1 ? 10 : 0,
-                ),
+                margin: i != pages.length - 1
+                    ? const EdgeInsets.only(right: 10)
+                    : null,
                 child: Material(
                   color: theme.colorScheme.onInverseSurface,
                   borderRadius: const BorderRadius.all(Radius.circular(6)),
-                  clipBehavior: Clip.hardEdge,
                   child: InkWell(
+                    borderRadius: const BorderRadius.all(Radius.circular(6)),
                     onTap: () {
+                      if (widget.onDownload case final onDownload?) {
+                        if (onDownload(item) && mounted) {
+                          setState(() {});
+                        }
+                        return;
+                      }
                       if (widget.showEpisodes == null) {
                         Get.back();
                       }
-                      widget.videoIntroController.changeSeasonOrbangu(
-                        null,
-                        widget.bvid,
-                        pages[i].cid,
-                        IdUtils.bv2av(widget.bvid),
-                        widget.cover,
+                      widget.ugcIntroController.onChangeEpisode(
+                        item
+                          ..bvid ??= widget.bvid
+                          ..cover ??= widget.cover,
                       );
                       if (widget.list != null &&
-                          widget.videoIntroController.videoDetail.value
+                          widget
+                                  .ugcIntroController
+                                  .videoDetail
+                                  .value
                                   .ugcSeason !=
                               null) {
                         _videoDetailController.seasonCid = pages.first.cid;
                       }
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 8, horizontal: 8),
+                      padding: const EdgeInsets.all(8),
                       child: Row(
                         children: <Widget>[
                           if (isCurrentIndex) ...<Widget>[
@@ -179,20 +201,29 @@ class _PagesPanelState extends State<PagesPanel> {
                               height: 12,
                               semanticLabel: "正在播放：",
                             ),
-                            const SizedBox(width: 6)
+                            const SizedBox(width: 6),
                           ],
                           Expanded(
-                              child: Text(
-                            pages[i].pagePart!,
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isCurrentIndex
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
+                            child: Text(
+                              item.part!,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isCurrentIndex
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurface,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ))
+                          ),
+                          if (widget.cidSet?.contains(item.cid) ?? false)
+                            Icon(
+                              size: 13,
+                              color: theme.colorScheme.secondary.withValues(
+                                alpha: 0.8,
+                              ),
+                              FontAwesomeIcons.circleDown,
+                            ),
                         ],
                       ),
                     ),
@@ -201,7 +232,7 @@ class _PagesPanelState extends State<PagesPanel> {
               );
             },
           ),
-        )
+        ),
       ],
     );
   }

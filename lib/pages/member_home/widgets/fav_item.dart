@@ -13,44 +13,36 @@ class MemberFavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Material(
-      color: Colors.transparent,
+      type: MaterialType.transparency,
       child: InkWell(
         onTap: () {
-          if (item.type == 2) {
-            Get.toNamed(
-              '/favDetail',
-              parameters: {
-                'mediaId': item.mediaId.toString(),
-                'heroTag': Utils.makeHeroTag(item.mediaId),
-              },
-            );
-          }
+          Get.toNamed(
+            '/favDetail',
+            parameters: {
+              'mediaId': item.mediaId.toString(),
+              'heroTag': Utils.makeHeroTag(item.mediaId),
+            },
+          );
         },
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-        ),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: StyleString.safeSpace,
             vertical: 5,
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AspectRatio(
-                aspectRatio: StyleString.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, boxConstraints) {
-                    return NetworkImgLayer(
-                      src: item.cover,
-                      width: boxConstraints.maxWidth,
-                      height: boxConstraints.maxHeight,
-                    );
-                  },
-                ),
+              NetworkImgLayer(
+                src: item.cover,
+                width: 140.8,
+                height: 88,
               ),
               const SizedBox(width: 10),
               Expanded(

@@ -1,5 +1,5 @@
 import 'package:PiliPlus/models/model_owner.dart';
-import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
+import 'package:PiliPlus/models/model_video.dart';
 import 'package:PiliPlus/models_new/video/video_detail/rights.dart';
 import 'package:PiliPlus/models_new/video/video_detail/stat.dart';
 
@@ -18,7 +18,7 @@ class Arc {
   int? duration;
   Rights? rights;
   Owner? author;
-  Stat? stat;
+  VideoStat? stat;
   String? dynam1c;
   Dimension? dimension;
   bool? isChargeableSeason;
@@ -57,37 +57,37 @@ class Arc {
   });
 
   factory Arc.fromJson(Map<String, dynamic> json) => Arc(
-        aid: json['aid'] as int?,
-        videos: json['videos'] as int?,
-        typeId: json['type_id'] as int?,
-        typeName: json['type_name'] as String?,
-        copyright: json['copyright'] as int?,
-        pic: json['pic'] as String?,
-        title: json['title'] as String?,
-        pubdate: json['pubdate'] as int?,
-        ctime: json['ctime'] as int?,
-        desc: json['desc'] as String?,
-        state: json['state'] as int?,
-        duration: json['duration'] as int?,
-        rights: json['rights'] == null
-            ? null
-            : Rights.fromJson(json['rights'] as Map<String, dynamic>),
-        author: json['author'] == null
-            ? null
-            : Owner.fromJson(json['author'] as Map<String, dynamic>),
-        stat: json['stat'] == null
-            ? null
-            : Stat.fromJson(json['stat'] as Map<String, dynamic>),
-        dynam1c: json['dynamic'] as String?,
-        dimension: json['dimension'] == null
-            ? null
-            : Dimension.fromJson(json['dimension'] as Map<String, dynamic>),
-        isChargeableSeason: json['is_chargeable_season'] as bool?,
-        isBlooper: json['is_blooper'] as bool?,
-        enableVt: json['enable_vt'] as int?,
-        vtDisplay: json['vt_display'] as String?,
-        typeIdV2: json['type_id_v2'] as int?,
-        typeNameV2: json['type_name_v2'] as String?,
-        isLessonVideo: json['is_lesson_video'] as int?,
-      );
+    aid: json['aid'] as int?,
+    videos: json['videos'] as int?,
+    typeId: json['type_id'] as int?,
+    typeName: json['type_name'] as String?,
+    copyright: json['copyright'] as int?,
+    pic: json['pic'] as String?,
+    title: json['title'] as String?,
+    pubdate: json['pubdate'] as int?,
+    ctime: json['ctime'] as int?,
+    desc: json['desc'] as String?,
+    state: json['state'] as int?,
+    duration: json['duration'] as int?,
+    rights: json['rights'] == null
+        ? null
+        : Rights.fromJson(json['rights'] as Map<String, dynamic>),
+    author: json['author'] == null
+        ? null
+        : Owner.fromJson(json['author'] as Map<String, dynamic>),
+    stat: json['stat'] == null
+        ? null
+        : VideoStat.fromJson(json['stat'] as Map<String, dynamic>),
+    dynam1c: json['dynamic'] as String?,
+    dimension: json['dimension'] == null
+        ? null
+        : Dimension.fromJson(json['dimension'] as Map<String, dynamic>),
+    isChargeableSeason: json['is_chargeable_season'] as bool?,
+    isBlooper: json['is_blooper'] as bool?,
+    enableVt: json['enable_vt'] as int?,
+    vtDisplay: json['vt_display'] as String?,
+    typeIdV2: json['type_id_v2'] as int?,
+    typeNameV2: json['type_name_v2'] as String?,
+    isLessonVideo: json['is_lesson_video'] as int?,
+  );
 }

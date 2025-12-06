@@ -1,12 +1,13 @@
-import 'package:PiliPlus/common/skeleton/video_card_h.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models_new/sub/sub/list.dart';
 import 'package:PiliPlus/models_new/sub/sub_detail/media.dart';
 import 'package:PiliPlus/pages/subscription_detail/controller.dart';
 import 'package:PiliPlus/pages/subscription_detail/widget/sub_video_card.dart';
 import 'package:PiliPlus/utils/grid.dart';
+import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -16,9 +17,24 @@ class SubDetailPage extends StatefulWidget {
 
   @override
   State<SubDetailPage> createState() => _SubDetailPageState();
+
+  static void toSubDetailPage(
+    int id, {
+    String? heroTag,
+    SubItemModel? subInfo,
+  }) {
+    Get.toNamed(
+      '/subDetail',
+      arguments: {
+        'id': id,
+        'subInfo': subInfo,
+        'heroTag': heroTag,
+      },
+    );
+  }
 }
 
-class _SubDetailPageState extends State<SubDetailPage> {
+class _SubDetailPageState extends State<SubDetailPage> with GridMixin {
   late final SubDetailController _subDetailController = Get.put(
     SubDetailController(),
     tag: Utils.makeHeroTag(Get.parameters['id']),
@@ -27,27 +43,28 @@ class _SubDetailPageState extends State<SubDetailPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: refreshIndicator(
-          onRefresh: _subDetailController.onRefresh,
-          child: CustomScrollView(
-            controller: _subDetailController.scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              _buildAppBar(theme),
-              SliverPadding(
-                padding: EdgeInsets.only(
-                  top: 7,
-                  bottom: MediaQuery.paddingOf(context).bottom + 80,
-                ),
-                sliver: Obx(
-                    () => _buildBody(_subDetailController.loadingState.value)),
+    final padding = MediaQuery.viewPaddingOf(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      child: refreshIndicator(
+        onRefresh: _subDetailController.onRefresh,
+        child: CustomScrollView(
+          controller: _subDetailController.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            _appBar(theme, padding),
+            SliverPadding(
+              padding: EdgeInsets.only(
+                top: 7,
+                left: padding.left,
+                right: padding.right,
+                bottom: padding.bottom + 100,
               ),
-            ],
-          ),
+              sliver: Obx(
+                () => _buildBody(_subDetailController.loadingState.value),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -55,19 +72,12 @@ class _SubDetailPageState extends State<SubDetailPage> {
 
   Widget _buildBody(LoadingState<List<SubDetailItemModel>?> loadingState) {
     return switch (loadingState) {
-      Loading() => SliverGrid(
-          gridDelegate: Grid.videoCardHDelegate(context),
-          delegate: SliverChildBuilderDelegate(
-            (context, index) => const VideoCardHSkeleton(),
-            childCount: 10,
-          ),
-        ),
-      Success(:var response) => response?.isNotEmpty == true
-          ? SliverGrid(
-              gridDelegate: Grid.videoCardHDelegate(context),
-              delegate: SliverChildBuilderDelegate(
-                childCount: response!.length,
-                (context, index) {
+      Loading() => gridSkeleton,
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? SliverGrid.builder(
+                gridDelegate: gridDelegate,
+                itemBuilder: (context, index) {
                   if (index == response.length - 1) {
                     _subDetailController.onLoadMore();
                   }
@@ -75,23 +85,48 @@ class _SubDetailPageState extends State<SubDetailPage> {
                     videoItem: response[index],
                   );
                 },
-              ),
-            )
-          : HttpError(
-              onReload: _subDetailController.onReload,
-            ),
+                itemCount: response.length,
+              )
+            : HttpError(onReload: _subDetailController.onReload),
       Error(:var errMsg) => HttpError(
-          errMsg: errMsg,
-          onReload: _subDetailController.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _subDetailController.onReload,
+      ),
     };
   }
 
-  Widget _buildAppBar(ThemeData theme) {
+  Widget _appBar(ThemeData theme, EdgeInsets padding) {
+    final info = _subDetailController.subInfo;
+    if (info != null) return _buildAppBar(theme, padding, info);
+    return Obx(() {
+      return switch (_subDetailController.loadingState.value) {
+        Loading() || Error() => const SliverAppBar(),
+        Success() => _buildAppBar(
+          theme,
+          padding,
+          _subDetailController.subInfo!,
+        ),
+      };
+    });
+  }
+
+  Widget _buildAppBar(ThemeData theme, EdgeInsets padding, SubItemModel info) {
     final style = TextStyle(
+      height: 1,
       fontSize: 12.5,
       color: theme.colorScheme.outline,
     );
+    Widget cover = NetworkImgLayer(
+      width: 176,
+      height: 110,
+      src: info.cover,
+    );
+    if (_subDetailController.heroTag != null) {
+      cover = Hero(
+        tag: _subDetailController.heroTag!,
+        child: cover,
+      );
+    }
     return SliverAppBar.medium(
       expandedHeight: kToolbarHeight + 132,
       pinned: true,
@@ -99,16 +134,14 @@ class _SubDetailPageState extends State<SubDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _subDetailController.subInfo.title!,
+            info.title!,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.titleMedium,
           ),
-          Obx(
-            () => Text(
-              '共${_subDetailController.mediaCount.value}条视频',
-              style: theme.textTheme.labelMedium,
-            ),
+          Text(
+            '共${info.mediaCount}条视频',
+            style: theme.textTheme.labelMedium,
           ),
         ],
       ),
@@ -122,8 +155,8 @@ class _SubDetailPageState extends State<SubDetailPage> {
             ),
           ),
           padding: EdgeInsets.only(
-            top: kToolbarHeight + MediaQuery.paddingOf(context).top + 10,
-            left: 12,
+            top: kToolbarHeight + padding.top + 10,
+            left: 12 + padding.left,
             right: 12,
             bottom: 12,
           ),
@@ -131,54 +164,36 @@ class _SubDetailPageState extends State<SubDetailPage> {
             spacing: 12,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Hero(
-                tag: _subDetailController.heroTag,
-                child: NetworkImgLayer(
-                  width: 176,
-                  height: 110,
-                  src: _subDetailController.subInfo.cover,
-                ),
-              ),
+              cover,
               Expanded(
                 child: Column(
-                  spacing: 4,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _subDetailController.subInfo.title!,
-                      style: TextStyle(
-                        fontSize: theme.textTheme.titleMedium!.fontSize,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        info.title!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        Get.toNamed(
-                          '/member?mid=${_subDetailController.subInfo.upper!.mid}',
-                          arguments: {
-                            'face': _subDetailController.subInfo.upper!.face,
-                          },
-                        );
-                      },
+                      onTap: () =>
+                          Get.toNamed('/member?mid=${info.upper!.mid}'),
                       child: Text(
-                        _subDetailController.subInfo.upper!.name!,
+                        info.upper!.name!,
                         style: TextStyle(color: theme.colorScheme.primary),
                       ),
                     ),
-                    const Spacer(),
-                    Obx(
-                      () => _subDetailController.mediaCount.value == 0
-                          ? const SizedBox.shrink()
-                          : Text(
-                              '共${_subDetailController.mediaCount.value}条视频',
-                              style: style,
-                            ),
-                    ),
-                    Obx(
-                      () => Text(
-                        '${Utils.numFormat(_subDetailController.playCount.value)}次播放',
-                        style: style,
-                      ),
+                    const SizedBox(height: 4),
+                    Text('共${info.mediaCount}条视频', style: style),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${NumUtils.numFormat(info.viewCount ?? info.cntInfo?.play)}次播放',
+                      style: style,
                     ),
                   ],
                 ),

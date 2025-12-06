@@ -1,67 +1,115 @@
-// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
+import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models_new/later/data.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
-import 'package:PiliPlus/pages/common/multi_select_controller.dart';
+import 'package:PiliPlus/pages/common/common_list_controller.dart'
+    show CommonListController;
+import 'package:PiliPlus/pages/common/multi_select/base.dart';
+import 'package:PiliPlus/pages/common/multi_select/multi_select_controller.dart';
 import 'package:PiliPlus/pages/later/base_controller.dart';
-import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
-class LaterController extends MultiSelectController<LaterData, LaterItemModel> {
-  LaterController(
-    this.laterViewType,
-  );
+mixin BaseLaterController
+    on
+        CommonListController<LaterData, LaterItemModel>,
+        CommonMultiSelectMixin<LaterItemModel>,
+        DeleteItemMixin<LaterData, LaterItemModel> {
+  ValueChanged<int>? updateCount;
+
+  @override
+  void onRemove() {
+    showConfirmDialog(
+      context: Get.context!,
+      content: '确认删除所选稍后再看吗？',
+      title: '提示',
+      onConfirm: () async {
+        final removeList = allChecked.toSet();
+        SmartDialog.showLoading(msg: '请求中');
+        final res = await UserHttp.toViewDel(
+          aids: removeList.map((item) => item.aid).join(','),
+        );
+        if (res['status']) {
+          updateCount?.call(removeList.length);
+          afterDelete(removeList);
+        }
+        SmartDialog.dismiss();
+        SmartDialog.showToast(res['msg']);
+      },
+    );
+  }
+
+  // single
+  void toViewDel(
+    BuildContext context,
+    int index,
+    int? aid,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('提示'),
+          content: const Text('即将移除该视频，确定是否移除'),
+          actions: [
+            TextButton(
+              onPressed: Get.back,
+              child: Text(
+                '取消',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                Get.back();
+                final res = await UserHttp.toViewDel(aids: aid.toString());
+                if (res['status']) {
+                  loadingState
+                    ..value.data!.removeAt(index)
+                    ..refresh();
+                  updateCount?.call(1);
+                }
+                SmartDialog.showToast(res['msg']);
+              },
+              child: const Text('确认移除'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class LaterController extends MultiSelectController<LaterData, LaterItemModel>
+    with BaseLaterController {
+  LaterController(this.laterViewType);
   final LaterViewType laterViewType;
 
-  AccountService accountService = Get.find<AccountService>();
+  late final mid = Accounts.main.mid;
 
   final RxBool asc = false.obs;
 
   final LaterBaseController baseCtr = Get.put(LaterBaseController());
 
   @override
+  RxBool get enableMultiSelect => baseCtr.enableMultiSelect;
+
+  @override
+  RxInt get rxCount => baseCtr.checkedCount;
+
+  @override
   Future<LoadingState<LaterData>> customGetData() => UserHttp.seeYouLater(
-        page: page,
-        viewed: laterViewType.type,
-        asc: asc.value,
-      );
-
-  @override
-  void onSelect(int index, [bool disableSelect = true]) {
-    List<LaterItemModel> list = loadingState.value.data!;
-    list[index].checked = !(list[index].checked ?? false);
-    baseCtr.checkedCount.value =
-        list.where((item) => item.checked == true).length;
-    loadingState.refresh();
-    if (baseCtr.checkedCount.value == 0) {
-      baseCtr.enableMultiSelect.value = false;
-    }
-  }
-
-  @override
-  void handleSelect([bool checked = false, bool disableSelect = true]) {
-    if (loadingState.value.isSuccess) {
-      List<LaterItemModel>? list = loadingState.value.data;
-      if (list?.isNotEmpty == true) {
-        for (LaterItemModel item in list!) {
-          item.checked = checked;
-        }
-        baseCtr.checkedCount.value = checked ? list.length : 0;
-        loadingState.refresh();
-      }
-    }
-    if (!checked) {
-      baseCtr.enableMultiSelect.value = false;
-    }
-  }
+    page: page,
+    viewed: laterViewType.type,
+    asc: asc.value,
+  );
 
   @override
   void onInit() {
@@ -80,43 +128,6 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel> {
     if (length >= baseCtr.counts[laterViewType]!) {
       isEnd = true;
     }
-  }
-
-  // single
-  void toViewDel(BuildContext context, int index, int? aid) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('提示'),
-          content: const Text('即将移除该视频，确定是否移除'),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(color: Theme.of(context).colorScheme.outline),
-              ),
-            ),
-            TextButton(
-              onPressed: () async {
-                Get.back();
-                var res = await UserHttp.toViewDel(aids: [aid]);
-                if (res['status']) {
-                  baseCtr.counts[laterViewType] =
-                      baseCtr.counts[laterViewType]! - 1;
-                  loadingState
-                    ..value.data!.removeAt(index)
-                    ..refresh();
-                }
-                SmartDialog.showToast(res['msg']);
-              },
-              child: const Text('确认移除'),
-            )
-          ],
-        );
-      },
-    );
   }
 
   // 一键清空
@@ -147,57 +158,6 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel> {
     );
   }
 
-  void onDelChecked(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('提示'),
-          content: const Text('确认删除所选稍后再看吗？'),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Get.back();
-                _onDelete(loadingState.value.data!
-                    .where((e) => e.checked == true)
-                    .toList());
-              },
-              child: const Text('确认'),
-            )
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _onDelete(List<LaterItemModel> result) async {
-    SmartDialog.showLoading(msg: '请求中');
-    List<int?> aids = result.map((item) => item.aid).toList();
-    var res = await UserHttp.toViewDel(aids: aids);
-    if (res['status']) {
-      Set<LaterItemModel> remainList =
-          loadingState.value.data!.toSet().difference(result.toSet());
-      baseCtr.counts[laterViewType] =
-          baseCtr.counts[laterViewType]! - aids.length;
-      loadingState.value = Success(remainList.toList());
-      if (baseCtr.enableMultiSelect.value) {
-        baseCtr.checkedCount.value = 0;
-        baseCtr.enableMultiSelect.value = false;
-      }
-    }
-    SmartDialog.dismiss();
-    SmartDialog.showToast(res['msg']);
-  }
-
   // 稍后再看播放全部
   void toViewPlayAll() {
     if (loadingState.value.isSuccess) {
@@ -208,19 +168,17 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel> {
         if (item.cid == null || item.pgcLabel?.isNotEmpty == true) {
           continue;
         } else {
-          if (item.bvid != list.first.bvid) {
-            SmartDialog.showToast('已跳过不支持播放的视频');
-          }
           PageUtils.toVideoPage(
-            'bvid=${item.bvid}&cid=${item.cid}',
-            arguments: {
-              'videoItem': item,
-              'heroTag': Utils.makeHeroTag(item.bvid),
-              'sourceType': 'watchLater',
+            bvid: item.bvid,
+            cid: item.cid!,
+            cover: item.pic,
+            title: item.title,
+            extraArguments: {
+              'sourceType': SourceType.watchLater,
               'count': baseCtr.counts[LaterViewType.all],
               'favTitle': '稍后再看',
-              'mediaId': accountService.mid,
-              'desc': false,
+              'mediaId': mid,
+              'desc': asc.value,
             },
           );
           break;
@@ -228,6 +186,11 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel> {
       }
     }
   }
+
+  @override
+  ValueChanged<int>? get updateCount =>
+      (count) => baseCtr.counts[laterViewType] =
+          baseCtr.counts[laterViewType]! - count;
 
   @override
   Future<void> onReload() {

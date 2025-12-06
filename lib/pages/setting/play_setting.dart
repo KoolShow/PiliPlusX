@@ -1,36 +1,32 @@
-import 'package:PiliPlus/pages/setting/widgets/model.dart';
-import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/pages/setting/models/play_settings.dart';
 import 'package:flutter/material.dart';
 
 class PlaySetting extends StatefulWidget {
-  const PlaySetting({super.key, this.showAppBar});
+  const PlaySetting({super.key, this.showAppBar = true});
 
-  final bool? showAppBar;
+  final bool showAppBar;
 
   @override
   State<PlaySetting> createState() => _PlaySettingState();
 }
 
 class _PlaySettingState extends State<PlaySetting> {
-  @override
-  void dispose() {
-    super.dispose();
-
-    // 重新验证媒体通知后台播放设置
-    videoPlayerServiceHandler.revalidateSetting();
-  }
+  final settings = playSettings;
 
   @override
   Widget build(BuildContext context) {
+    final showAppBar = widget.showAppBar;
+    final padding = MediaQuery.viewPaddingOf(context);
     return Scaffold(
-      appBar: widget.showAppBar == false
-          ? null
-          : AppBar(title: const Text('播放器设置')),
+      resizeToAvoidBottomInset: false,
+      appBar: showAppBar ? AppBar(title: const Text('播放器设置')) : null,
       body: ListView(
-        children: [
-          ...playSettings.map((item) => item.widget),
-          SizedBox(height: MediaQuery.paddingOf(context).bottom + 80),
-        ],
+        padding: EdgeInsets.only(
+          left: showAppBar ? padding.left : 0,
+          right: showAppBar ? padding.right : 0,
+          bottom: padding.bottom + 100,
+        ),
+        children: settings.map((item) => item.widget).toList(),
       ),
     );
   }

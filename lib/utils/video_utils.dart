@@ -1,93 +1,96 @@
 import 'package:PiliPlus/models/common/video/cdn_type.dart';
-import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/live/live_room_play_info/codec.dart';
-import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter/foundation.dart';
 
-class VideoUtils {
-  static String getCdnUrl(dynamic item, [String? defaultCDNService]) {
-    String? backupUrl;
-    String? videoUrl;
-    defaultCDNService ??= GStorage.defaultCDNService;
-    if (item is AudioItem) {
-      if (GStorage.setting
-          .get(SettingBoxKey.disableAudioCDN, defaultValue: true)) {
-        return item.backupUrl?.isNotEmpty == true
-            ? item.backupUrl!
-            : item.baseUrl ?? "";
+abstract final class VideoUtils {
+  static CDNService cdnService = Pref.defaultCDNService;
+  static String? liveCdnUrl = Pref.liveCdnUrl;
+  static bool disableAudioCDN = Pref.disableAudioCDN;
+
+  static const _proxyTf = 'proxy-tf-all-ws.bilivideo.com';
+
+  static final _mirrorRegex = RegExp(
+    r'^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode',
+  );
+
+  static final _mCdnTfRegex = RegExp(
+    r'^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?:\:\d{1,5})?/v\d/resource)',
+  );
+
+  static String getCdnUrl(
+    Iterable<String> urls, {
+    CDNService? defaultCDNService,
+    bool isAudio = false,
+  }) {
+    defaultCDNService ??= cdnService;
+
+    if (defaultCDNService == CDNService.baseUrl) {
+      return urls.first;
+    }
+
+    String? mcdnTf;
+    String? mcdnUpgcxcode;
+
+    String last = '';
+    for (var url in urls) {
+      last = url;
+      if (_mirrorRegex.hasMatch(url)) {
+        final uri = Uri.parse(url);
+        if (uri.queryParameters['os'] == 'mcdn') {
+          // upos-sz-mirrorcoso1.bilivideo.com os=mcdn
+          mcdnUpgcxcode = url;
+        } else {
+          if (defaultCDNService == CDNService.backupUrl ||
+              (isAudio && disableAudioCDN)) {
+            return url;
+          }
+          return uri.replace(host: defaultCDNService.host).toString();
+        }
+      }
+
+      if (_mCdnTfRegex.hasMatch(url)) {
+        mcdnTf = url;
+        continue;
+      }
+
+      // upos-\w*-302.* & bcache & mcdn host but upgcxcode path
+      if (url.contains('/upgcxcode/')) {
+        mcdnUpgcxcode = url;
+        continue;
+      }
+
+      // may be deprecated
+      if (url.contains('szbdyd.com')) {
+        final uri = Uri.parse(url);
+        final hostname =
+            uri.queryParameters['xy_usource'] ?? defaultCDNService.host;
+        return uri
+            .replace(scheme: 'https', host: hostname, port: 443)
+            .toString();
+      }
+
+      if (kDebugMode) {
+        debugPrint('unknown cdn type: $url');
       }
     }
-    if (defaultCDNService == CDNService.baseUrl.code) {
-      return (item.baseUrl as String?)?.isNotEmpty == true
-          ? item.baseUrl
-          : item.backupUrl ?? "";
-    }
-    if (item is CodecItem) {
-      backupUrl = (item.urlInfo?.first.host)! +
-          item.baseUrl! +
-          item.urlInfo!.first.extra!;
-    } else {
-      backupUrl = item.backupUrl;
-    }
-    if (defaultCDNService == CDNService.backupUrl.code) {
-      return backupUrl?.isNotEmpty == true ? backupUrl : item.baseUrl ?? "";
-    }
-    videoUrl = backupUrl?.isNotEmpty == true ? backupUrl : item.baseUrl;
 
-    if (videoUrl.isNullOrEmpty) {
-      return "";
-    }
-    // if (kDebugMode) debugPrint("videoUrl:$videoUrl");
+    return mcdnUpgcxcode == null
+        ? mcdnTf == null
+              ? last
+              : Uri(
+                  scheme: 'https',
+                  host: _proxyTf,
+                  queryParameters: {'url': mcdnTf},
+                ).toString()
+        : Uri.parse(mcdnUpgcxcode)
+              .replace(host: defaultCDNService.host ?? CDNService.ali.host)
+              .toString();
+  }
 
-    String defaultCDNHost = CDNService.fromCode(defaultCDNService).host;
-    // if (kDebugMode) debugPrint("defaultCDNHost:$defaultCDNHost");
-    if (videoUrl!.contains("szbdyd.com")) {
-      final uri = Uri.parse(videoUrl);
-      String hostname = uri.queryParameters['xy_usource'] ?? defaultCDNHost;
-      videoUrl = uri.replace(host: hostname, port: 443).toString();
-    } else if (videoUrl.contains(".mcdn.bilivideo") ||
-        videoUrl.contains("/upgcxcode/")) {
-      videoUrl = Uri.parse(videoUrl)
-          .replace(host: defaultCDNHost, port: 443)
-          .toString();
-      // videoUrl =
-      //     'https://proxy-tf-all-ws.bilivideo.com/?url=${Uri.encodeComponent(videoUrl)}';
-    }
-    // if (kDebugMode) debugPrint("videoUrl:$videoUrl");
-
-    // /// 先获取backupUrl 一般是upgcxcode地址 播放更稳定
-    // if (item is VideoItem) {
-    //   backupUrl = item.backupUrl ?? "";
-    //   videoUrl = backupUrl.contains("http") ? backupUrl : (item.baseUrl ?? "");
-    // } else if (item is AudioItem) {
-    //   backupUrl = item.backupUrl ?? "";
-    //   videoUrl = backupUrl.contains("http") ? backupUrl : (item.baseUrl ?? "");
-    // } else if (item is CodecItem) {
-    //   backupUrl = (item.urlInfo?.first.host)! +
-    //       item.baseUrl! +
-    //       item.urlInfo!.first.extra!;
-    //   videoUrl = backupUrl.contains("http") ? backupUrl : (item.baseUrl ?? "");
-    // } else {
-    //   return "";
-    // }
-    //
-    // /// issues #70
-    // if (videoUrl.contains(".mcdn.bilivideo")) {
-    //   videoUrl =
-    //       'https://proxy-tf-all-ws.bilivideo.com/?url=${Uri.encodeComponent(videoUrl)}';
-    // } else if (videoUrl.contains("/upgcxcode/")) {
-    //   //CDN列表
-    //   var cdnList = {
-    //     'ali': 'upos-sz-mirrorali.bilivideo.com',
-    //     'cos': 'upos-sz-mirrorcos.bilivideo.com',
-    //     'hw': 'upos-sz-mirrorhw.bilivideo.com',
-    //   };
-    //   //取一个CDN
-    //   var cdn = cdnList['cos'] ?? "";
-    //   var reg = RegExp(r'(http|https)://(.*?)/upgcxcode/');
-    //   videoUrl = videoUrl.replaceAll(reg, "https://$cdn/upgcxcode/");
-    // }
-
-    return videoUrl;
+  static String getLiveCdnUrl(CodecItem e) {
+    return (liveCdnUrl ?? e.urlInfo!.first.host!) +
+        e.baseUrl! +
+        e.urlInfo!.first.extra!;
   }
 }

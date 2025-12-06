@@ -1,6 +1,6 @@
 import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/space/space_archive/item.dart';
 import 'package:PiliPlus/pages/member_pgc/controller.dart';
@@ -49,9 +49,7 @@ class _MemberBangumiState extends State<MemberBangumi>
               left: StyleString.safeSpace,
               right: StyleString.safeSpace,
               top: StyleString.safeSpace,
-              bottom: StyleString.safeSpace +
-                  MediaQuery.paddingOf(context).bottom +
-                  80,
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
             ),
             sliver: Obx(
               () => _buildBody(_controller.loadingState.value),
@@ -62,20 +60,22 @@ class _MemberBangumiState extends State<MemberBangumi>
     );
   }
 
+  late final gridDelegate = SliverGridDelegateWithExtentAndRatio(
+    mainAxisSpacing: StyleString.cardSpace,
+    crossAxisSpacing: StyleString.cardSpace,
+    maxCrossAxisExtent: Grid.smallCardWidth * 0.6,
+    childAspectRatio: 0.75,
+    mainAxisExtent: MediaQuery.textScalerOf(context).scale(52),
+  );
+
   Widget _buildBody(LoadingState<List<SpaceArchiveItem>?> loadingState) {
     return switch (loadingState) {
       Loading() => const SliverToBoxAdapter(),
-      Success(:var response) => response?.isNotEmpty == true
-          ? SliverGrid(
-              gridDelegate: SliverGridDelegateWithExtentAndRatio(
-                mainAxisSpacing: StyleString.cardSpace,
-                crossAxisSpacing: StyleString.cardSpace,
-                maxCrossAxisExtent: Grid.smallCardWidth / 3 * 2,
-                childAspectRatio: 0.75,
-                mainAxisExtent: MediaQuery.textScalerOf(context).scale(52),
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? SliverGrid.builder(
+                gridDelegate: gridDelegate,
+                itemBuilder: (context, index) {
                   if (index == response.length - 1) {
                     _controller.onLoadMore();
                   }
@@ -83,14 +83,13 @@ class _MemberBangumiState extends State<MemberBangumi>
                     item: response[index],
                   );
                 },
-                childCount: response!.length,
-              ),
-            )
-          : HttpError(onReload: _controller.onReload),
+                itemCount: response.length,
+              )
+            : HttpError(onReload: _controller.onReload),
       Error(:var errMsg) => HttpError(
-          errMsg: errMsg,
-          onReload: _controller.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _controller.onReload,
+      ),
     };
   }
 }

@@ -1,16 +1,15 @@
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/member.dart';
 import 'package:PiliPlus/models/member/tags.dart';
-import 'package:PiliPlus/services/account_service.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class FollowController extends GetxController with GetTickerProviderStateMixin {
-  late int mid;
-  String? name;
-  late bool isOwner;
+  late final int mid;
+  late final RxnString name;
+  late final bool isOwner;
 
   late final Rx<LoadingState> followState = LoadingState.loading().obs;
   late final RxList<MemberTagItemModel> tabs = <MemberTagItemModel>[].obs;
@@ -19,24 +18,33 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
   @override
   void onInit() {
     super.onInit();
-    int ownerMid = Accounts.main.mid;
-    mid = Get.parameters['mid'] != null
-        ? int.parse(Get.parameters['mid']!)
-        : ownerMid;
-    isOwner = ownerMid == mid;
-    name = Get.parameters['name'] ?? Get.find<AccountService>().name.value;
+    final Map? args = Get.arguments;
+    final ownerMid = Accounts.main.mid;
+    final int? mid = args?['mid'];
+    this.mid = mid ?? ownerMid;
+    isOwner = ownerMid == this.mid;
     if (isOwner) {
       queryFollowUpTags();
+    } else {
+      final String? name = args?['name'];
+      this.name = RxnString(name);
+      if (name == null) {
+        _queryUserName();
+      }
     }
+  }
+
+  Future<void> _queryUserName() async {
+    final res = await MemberHttp.memberCardInfo(mid: mid);
+    name.value = res.dataOrNull?.card?.name;
   }
 
   Future<void> queryFollowUpTags() async {
     var res = await MemberHttp.followUpTags();
-    if (res['status']) {
+    if (res.isSuccess) {
       tabs
-        ..clear()
-        ..addAll(res['data'])
-        ..insert(0, MemberTagItemModel(name: '全部关注'));
+        ..assign(MemberTagItemModel(name: '全部关注'))
+        ..addAll(res.data);
       int initialIndex = 0;
       if (tabController != null) {
         initialIndex = tabController!.index.clamp(0, tabs.length - 1);
@@ -49,7 +57,7 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
       );
       followState.value = Success(tabs.hashCode);
     } else {
-      followState.value = Error(res['msg']);
+      followState.value = res;
     }
   }
 
@@ -70,12 +78,11 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
     }
   }
 
-  Future<void> onUpdateTag(int index, tagid, String tagName) async {
-    final res = await MemberHttp.updateFollowTag(tagid, tagName);
+  Future<void> onUpdateTag(MemberTagItemModel item, String tagName) async {
+    final res = await MemberHttp.updateFollowTag(item.tagid, tagName);
     if (res['status']) {
-      tabs
-        ..[index].name = tagName
-        ..refresh();
+      item.name = tagName;
+      tabs.refresh();
       SmartDialog.showToast('修改成功');
     } else {
       SmartDialog.showToast(res['msg']);

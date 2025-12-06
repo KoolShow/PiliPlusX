@@ -1,8 +1,10 @@
-import 'dart:math';
+import 'dart:async' show FutureOr;
+import 'dart:io' show Platform;
 
-import 'package:PiliPlus/grpc/grpc_repo.dart';
+import 'package:PiliPlus/grpc/grpc_req.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
+import 'package:PiliPlus/main.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/common/home_tab_type.dart';
 import 'package:PiliPlus/models/user/info.dart';
@@ -10,42 +12,55 @@ import 'package:PiliPlus/models/user/stat.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/dynamics_tab/controller.dart';
 import 'package:PiliPlus/pages/live/controller.dart';
-import 'package:PiliPlus/pages/media/controller.dart';
+import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
 import 'package:PiliPlus/pages/pgc/controller.dart';
 import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
+import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart' as web;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
-class LoginUtils {
-  static final random = Random();
+abstract class LoginUtils {
+  static FutureOr setWebCookie([Account? account]) {
+    if (Platform.isLinux) {
+      return null;
+    }
+    final cookies = (account ?? Accounts.main).cookieJar.toList();
+    final webManager = web.CookieManager.instance(
+      webViewEnvironment: webViewEnvironment,
+    );
+    final isWindows = Platform.isWindows;
+    return Future.wait(
+      cookies.map(
+        (cookie) => webManager.setCookie(
+          url: web.WebUri(
+            '${isWindows ? 'https://' : ''} ${cookie.domain}',
+          ),
+          name: cookie.name,
+          value: cookie.value,
+          path: cookie.path ?? '/',
+          domain: cookie.domain,
+          isSecure: cookie.secure,
+          isHttpOnly: cookie.httpOnly,
+        ),
+      ),
+    );
+  }
 
   static Future<void> onLoginMain() async {
     final account = Accounts.main;
-    GrpcRepo.updateHeaders(account.accessKey);
-    try {
-      final cookies = account.cookieJar.toList();
-      final webManager = web.CookieManager();
-      Future.wait([
-        ...cookies.map((item) => webManager.setCookie(
-              url: web.WebUri(item.domain ?? ''),
-              name: item.name,
-              value: item.value,
-              path: item.path ?? '',
-              domain: item.domain,
-              isSecure: item.secure,
-              isHttpOnly: item.httpOnly,
-            ))
-      ]);
-    } catch (e) {
-      SmartDialog.showToast('设置登录态失败，$e');
-    }
+    GrpcReq.updateHeaders(account.accessKey);
+    setWebCookie(account);
+    RequestUtils.syncHistoryStatus();
     final result = await UserHttp.userInfo();
-    if (result['status']) {
-      final UserInfoData data = result['data'];
+    if (result.isSuccess) {
+      final UserInfoData data = result.data;
       if (data.isLogin == true) {
         Get.find<AccountService>()
           ..mid = data.mid!
@@ -54,10 +69,12 @@ class LoginUtils {
           ..isLogin.value = true;
 
         SmartDialog.showToast('main登录成功');
-        await GStorage.userInfo.put('userInfoCache', data);
+        if (data != Pref.userInfoCache) {
+          await GStorage.userInfo.put('userInfoCache', data);
+        }
 
         try {
-          Get.find<MineController>().queryUserInfo();
+          Get.find<MineController>().onRefresh();
         } catch (_) {}
 
         try {
@@ -71,29 +88,30 @@ class LoginUtils {
         }
 
         try {
-          Get.find<MediaController>().onRefresh();
-        } catch (_) {}
-
-        try {
           Get.find<LiveController>().onRefresh();
         } catch (_) {}
 
         try {
           Get.find<PgcController>(tag: HomeTabType.bangumi.name)
-              .queryPgcFollow();
+            ..followPage = 1
+            ..followEnd = false
+            ..queryPgcFollow();
         } catch (_) {}
 
         try {
           Get.find<PgcController>(tag: HomeTabType.cinema.name)
-              .queryPgcFollow();
+            ..followPage = 1
+            ..followEnd = false
+            ..queryPgcFollow();
         } catch (_) {}
       }
     } else {
       // 获取用户信息失败
       await Accounts.deleteAll({account});
       SmartDialog.showNotify(
-          msg: '登录失败，请检查cookie是否正确，${result['msg']}',
-          notifyType: NotifyType.warning);
+        msg: '登录失败，请检查cookie是否正确，${result.toString()}',
+        notifyType: NotifyType.warning,
+      );
     }
   }
 
@@ -104,26 +122,30 @@ class LoginUtils {
       ..face.value = ''
       ..isLogin.value = false;
 
-    GrpcRepo.updateHeaders(null);
+    GrpcReq.updateHeaders(null);
 
     await Future.wait([
-      web.CookieManager().deleteAllCookies(),
+      if (!Platform.isLinux)
+        web.CookieManager.instance(
+          webViewEnvironment: webViewEnvironment,
+        ).deleteAllCookies(),
       GStorage.userInfo.delete('userInfoCache'),
     ]);
 
     try {
+      Get.find<MainController>().setDynCount();
+    } catch (_) {}
+
+    try {
       Get.find<MineController>()
         ..userInfo.value = UserInfoData()
-        ..userStat.value = UserStat();
+        ..userStat.value = UserStat()
+        ..loadingState.value = LoadingState.loading();
       // MineController.anonymity.value = false;
     } catch (_) {}
 
     try {
       Get.find<DynamicsController>().onRefresh();
-    } catch (_) {}
-
-    try {
-      Get.find<MediaController>().loadingState.value = LoadingState.loading();
     } catch (_) {}
 
     try {
@@ -148,14 +170,14 @@ class LoginUtils {
   }
 
   static String generateBuvid() {
-    var md5Str =
-        Iterable.generate(32, (_) => random.nextInt(16).toRadixString(16))
-            .join()
-            .toUpperCase();
+    var md5Str = Iterable.generate(
+      32,
+      (_) => Utils.random.nextInt(16).toRadixString(16),
+    ).join().toUpperCase();
     return 'XY${md5Str[2]}${md5Str[12]}${md5Str[22]}$md5Str';
   }
 
-  static final buvid = generateBuvid();
+  static final buvid = Pref.buvid;
 
   // static String getUUID() {
   //   return const Uuid().v4().replaceAll('-', '');
@@ -173,12 +195,14 @@ class LoginUtils {
         .replaceAll(RegExp(r'[-:TZ]'), '')
         .substring(0, 14);
 
-    final String randomHex32 =
-        List.generate(32, (index) => random.nextInt(16).toRadixString(16))
-            .join();
-    final String randomHex16 =
-        List.generate(16, (index) => random.nextInt(16).toRadixString(16))
-            .join();
+    final String randomHex32 = List.generate(
+      32,
+      (index) => Utils.random.nextInt(16).toRadixString(16),
+    ).join();
+    final String randomHex16 = List.generate(
+      16,
+      (index) => Utils.random.nextInt(16).toRadixString(16),
+    ).join();
 
     final String deviceID = randomHex32 + yyyyMMddHHmmss + randomHex16;
 

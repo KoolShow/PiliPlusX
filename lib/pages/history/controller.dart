@@ -1,12 +1,15 @@
+import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models_new/history/data.dart';
 import 'package:PiliPlus/models_new/history/list.dart';
 import 'package:PiliPlus/models_new/history/tab.dart';
-import 'package:PiliPlus/pages/common/multi_select_controller.dart';
+import 'package:PiliPlus/pages/common/multi_select/multi_select_controller.dart';
 import 'package:PiliPlus/pages/history/base_controller.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -18,12 +21,20 @@ class HistoryController
 
   late final baseCtr = Get.put(HistoryBaseController());
 
+  Account get account => baseCtr.account;
+
   final String? type;
   TabController? tabController;
   late RxList<HistoryTab> tabs = <HistoryTab>[].obs;
 
   int? max;
   int? viewAt;
+
+  @override
+  RxInt get rxCount => baseCtr.checkedCount;
+
+  @override
+  RxBool get enableMultiSelect => baseCtr.enableMultiSelect;
 
   @override
   void onInit() {
@@ -37,35 +48,6 @@ class HistoryController
     max = null;
     viewAt = null;
     return super.onRefresh();
-  }
-
-  @override
-  void onSelect(int index, [bool disableSelect = true]) {
-    List<HistoryItemModel> list = loadingState.value.data!;
-    list[index].checked = !(list[index].checked ?? false);
-    baseCtr.checkedCount.value =
-        list.where((item) => item.checked == true).length;
-    loadingState.refresh();
-    if (baseCtr.checkedCount.value == 0) {
-      baseCtr.enableMultiSelect.value = false;
-    }
-  }
-
-  @override
-  void handleSelect([bool checked = false, bool disableSelect = true]) {
-    if (loadingState.value.isSuccess) {
-      List<HistoryItemModel>? list = loadingState.value.data;
-      if (list?.isNotEmpty == true) {
-        for (HistoryItemModel item in list!) {
-          item.checked = checked;
-        }
-        baseCtr.checkedCount.value = checked ? list.length : 0;
-        loadingState.refresh();
-      }
-    }
-    if (!checked) {
-      baseCtr.enableMultiSelect.value = false;
-    }
   }
 
   @override
@@ -95,7 +77,7 @@ class HistoryController
 
   // 观看历史暂停状态
   Future<void> historyStatus() async {
-    var res = await UserHttp.historyStatus();
+    var res = await UserHttp.historyStatus(account: account);
     if (res['status']) {
       baseCtr.pauseStatus.value = res['data'];
       GStorage.localCache.put(LocalCacheKey.historyPause, res['data']);
@@ -106,83 +88,54 @@ class HistoryController
 
   // 删除某条历史记录
   void delHistory(HistoryItemModel item) {
-    _onDelete([item]);
+    _onDelete({item});
   }
 
   // 删除已看历史记录
-  void onDelHistory() {
-    if (loadingState.value.isSuccess) {
-      List<HistoryItemModel> list =
-          loadingState.value.data!.where((e) => e.progress == -1).toList();
-      if (list.isNotEmpty) {
-        _onDelete(list);
-      } else {
-        SmartDialog.showToast('无已看记录');
-      }
+  void onDelViewedHistory() {
+    final viewedList = loadingState.value.dataOrNull
+        ?.where((e) => e.progress == -1)
+        .toSet();
+    if (viewedList != null && viewedList.isNotEmpty) {
+      _onDelete(viewedList);
+    } else {
+      SmartDialog.showToast('无已看记录');
     }
   }
 
-  Future<void> _onDelete(List<HistoryItemModel> result) async {
+  Future<void> _onDelete(Set<HistoryItemModel> removeList) async {
     SmartDialog.showLoading(msg: '请求中');
-    List<String> kidList = result.map((item) {
-      return '${item.history.business}_${item.kid}';
-    }).toList();
-    var response = await UserHttp.delHistory(kidList);
+    final response = await UserHttp.delHistory(
+      removeList
+          .map((item) => '${item.history.business}_${item.kid}')
+          .join(','),
+      account: account,
+    );
     if (response['status']) {
-      List<HistoryItemModel> remainList =
-          loadingState.value.data!.toSet().difference(result.toSet()).toList();
-      if (remainList.isNotEmpty) {
-        loadingState.value = Success(remainList);
-      } else {
-        onReload();
-      }
-      if (baseCtr.enableMultiSelect.value) {
-        baseCtr.checkedCount.value = 0;
-        baseCtr.enableMultiSelect.value = false;
-      }
+      afterDelete(removeList);
     }
     SmartDialog.dismiss();
     SmartDialog.showToast(response['msg']);
   }
 
   // 删除选中的记录
-  void onDelCheckedHistory(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('提示'),
-          content: const Text('确认删除所选历史记录吗？'),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Get.back();
-                if (loadingState.value.isSuccess) {
-                  _onDelete(loadingState.value.data!
-                      .where((e) => e.checked == true)
-                      .toList());
-                }
-              },
-              child: const Text('确认'),
-            )
-          ],
-        );
-      },
+  @override
+  void onRemove() {
+    showConfirmDialog(
+      context: Get.context!,
+      content: '确认删除所选历史记录吗？',
+      title: '提示',
+      onConfirm: () => _onDelete(allChecked.toSet()),
     );
   }
 
   @override
-  Future<LoadingState<HistoryData>> customGetData() =>
-      UserHttp.historyList(type: type ?? 'all', max: max, viewAt: viewAt);
+  Future<LoadingState<HistoryData>> customGetData() => UserHttp.historyList(
+    type: type ?? 'all',
+    max: max,
+    viewAt: viewAt,
+    account: account,
+  );
 
   @override
   void onClose() {

@@ -18,6 +18,26 @@ class Segment {
     this.from,
     this.to,
   ]);
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    if (other is Segment) {
+      return start == other.start &&
+          end == other.end &&
+          color == other.color &&
+          title == other.title &&
+          url == other.url &&
+          from == other.from &&
+          to == other.to;
+    }
+    return false;
+  }
+
+  @override
+  int get hashCode => Object.hash(start, end, color, title, url, from, to);
 }
 
 class SegmentProgressBar extends CustomPainter {
@@ -43,7 +63,8 @@ class SegmentProgressBar extends CustomPainter {
         if (item.title != null) {
           double fontSize = 10;
 
-          _defHeight ??= (TextPainter(
+          _defHeight ??=
+              (TextPainter(
                 text: TextSpan(
                   text: item.title,
                   style: TextStyle(
@@ -51,23 +72,21 @@ class SegmentProgressBar extends CustomPainter {
                   ),
                 ),
                 textDirection: TextDirection.ltr,
-              )..layout())
-                  .height +
+              )..layout()).height +
               2;
 
           TextPainter getTextPainter() => TextPainter(
-                text: TextSpan(
-                  text: item.title,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: fontSize,
-                    height: 1,
-                  ),
-                ),
-                strutStyle:
-                    StrutStyle(leading: 0, height: 1, fontSize: fontSize),
-                textDirection: TextDirection.ltr,
-              )..layout();
+            text: TextSpan(
+              text: item.title,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: fontSize,
+                height: 1,
+              ),
+            ),
+            strutStyle: StrutStyle(leading: 0, height: 1, fontSize: fontSize),
+            textDirection: TextDirection.ltr,
+          )..layout();
 
           TextPainter textPainter = getTextPainter();
 
@@ -107,8 +126,8 @@ class SegmentProgressBar extends CustomPainter {
           double textX = i == 0
               ? (segmentStart - textPainter.width) / 2
               : (segmentStart - prevStart - textPainter.width) / 2 +
-                  prevStart +
-                  1;
+                    prevStart +
+                    1;
           double textY = (-_defHeight! - textPainter.height) / 2;
           textPainter.paint(canvas, Offset(textX, textY));
         } else {
@@ -127,7 +146,7 @@ class SegmentProgressBar extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
+  bool shouldRepaint(SegmentProgressBar oldDelegate) {
+    return segmentColors != oldDelegate.segmentColors;
   }
 }

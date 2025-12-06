@@ -1,6 +1,8 @@
 import 'dart:math';
 
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/dialog/report.dart';
+import 'package:PiliPlus/common/widgets/flutter/dyn/ink_well.dart';
 import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/user.dart';
@@ -8,23 +10,26 @@ import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/save_panel/view.dart';
+import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/context_ext.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/material.dart' hide InkWell;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide ContextExtensionss;
 
 class AuthorPanel extends StatelessWidget {
   final DynamicItemModel item;
   final Function? addBannedList;
+  final bool isSave;
   final bool isDetail;
   final ValueChanged? onRemove;
-  final bool isSave;
   final Function(bool isTop, dynamic dynId)? onSetTop;
   final VoidCallback? onBlock;
 
@@ -39,12 +44,11 @@ class AuthorPanel extends StatelessWidget {
     this.onBlock,
   });
 
-  Widget _buildAvatar() {
-    String? pendant = item.modules.moduleAuthor?.pendant?.image;
+  Widget _buildAvatar(ModuleAuthorModel moduleAuthor) {
+    String? pendant = moduleAuthor.pendant?.image;
     Widget avatar = PendantAvatar(
-      avatar: item.modules.moduleAuthor?.face,
+      avatar: moduleAuthor.face,
       size: pendant.isNullOrEmpty ? 40 : 34,
-      isVip: null,
       officialType: null, // 已被注释
       garbPendantImage: pendant,
     );
@@ -57,14 +61,15 @@ class AuthorPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final pubTime = item.modules.moduleAuthor?.pubTs != null
+    final moduleAuthor = item.modules.moduleAuthor!;
+    final pubTime = moduleAuthor.pubTs != null
         ? isSave
-            ? DateTime.fromMillisecondsSinceEpoch(
-                    item.modules.moduleAuthor!.pubTs! * 1000)
-                .toString()
-                .substring(0, 19)
-            : Utils.dateFormat(item.modules.moduleAuthor!.pubTs)
-        : item.modules.moduleAuthor?.pubTime;
+              ? DateFormatUtils.format(
+                  moduleAuthor.pubTs,
+                  format: DateFormatUtils.longFormatDs,
+                )
+              : DateFormatUtils.dateFormat(moduleAuthor.pubTs)
+        : moduleAuthor.pubTime;
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
@@ -73,39 +78,37 @@ class AuthorPanel extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: item.modules.moduleAuthor!.type == 'AUTHOR_TYPE_NORMAL'
+            onTap: moduleAuthor.type == 'AUTHOR_TYPE_NORMAL'
                 ? () {
                     feedBack();
                     Get.toNamed(
-                      '/member?mid=${item.modules.moduleAuthor!.mid}',
-                      arguments: {
-                        'face': item.modules.moduleAuthor!.face,
-                      },
+                      '/member?mid=${moduleAuthor.mid}',
                     );
                   }
                 : null,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildAvatar(),
+                _buildAvatar(moduleAuthor),
                 const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.modules.moduleAuthor?.name ?? '',
+                      moduleAuthor.name ?? '',
                       style: TextStyle(
-                        color: item.modules.moduleAuthor!.vip != null &&
-                                item.modules.moduleAuthor!.vip!.status > 0 &&
-                                item.modules.moduleAuthor!.vip!.type == 2
-                            ? context.vipColor
+                        color:
+                            moduleAuthor.vip != null &&
+                                moduleAuthor.vip!.status > 0 &&
+                                moduleAuthor.vip!.type == 2
+                            ? theme.colorScheme.vipColor
                             : theme.colorScheme.onSurface,
                         fontSize: theme.textTheme.titleSmall!.fontSize,
                       ),
                     ),
                     if (pubTime != null)
                       Text(
-                        '$pubTime${item.modules.moduleAuthor?.pubAction != null ? ' ${item.modules.moduleAuthor!.pubAction}' : ''}',
+                        '$pubTime${moduleAuthor.pubAction != null ? ' ${moduleAuthor.pubAction}' : ''}',
                         style: TextStyle(
                           color: theme.colorScheme.outline,
                           fontSize: theme.textTheme.labelSmall!.fontSize,
@@ -125,10 +128,13 @@ class AuthorPanel extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        borderRadius:
-                            const BorderRadius.all(Radius.circular(4)),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(4),
+                        ),
                         border: Border.all(
                           width: 1.25,
                           color: theme.colorScheme.primary,
@@ -151,52 +157,46 @@ class AuthorPanel extends StatelessWidget {
                     _moreWidget(context),
                   ],
                 )
-              : item.modules.moduleAuthor!.decorate != null
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
+              : moduleAuthor.decorate != null
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.centerRight,
                       children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          alignment: Alignment.centerRight,
-                          children: [
-                            CachedNetworkImage(
-                              height: 32,
-                              imageUrl: item.modules.moduleAuthor!.decorate!
-                                  .cardUrl.http2https,
-                            ),
-                            if (item.modules.moduleAuthor?.decorate?.fan?.numStr
-                                    ?.isNotEmpty ==
-                                true)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 32),
-                                child: Text(
-                                  '${item.modules.moduleAuthor!.decorate!.fan!.numStr}',
-                                  style: TextStyle(
-                                    height: 1,
-                                    fontSize: 11,
-                                    fontFamily: 'digital_id_num',
-                                    color: item.modules.moduleAuthor!.decorate!
-                                                .fan?.color
-                                                ?.startsWith('#') ==
-                                            true
-                                        ? Color(
-                                            int.parse(
-                                              item.modules.moduleAuthor!
-                                                  .decorate!.fan!.color!
-                                                  .replaceFirst('#', '0xFF'),
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                          ],
+                        CachedNetworkImage(
+                          height: 32,
+                          imageUrl: moduleAuthor.decorate!.cardUrl.http2https,
                         ),
-                        _moreWidget(context),
+                        if (moduleAuthor.decorate?.fan?.numStr?.isNotEmpty ==
+                            true)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 32),
+                            child: Text(
+                              '${moduleAuthor.decorate!.fan!.numStr}',
+                              style: TextStyle(
+                                height: 1,
+                                fontSize: 11,
+                                fontFamily: 'digital_id_num',
+                                color:
+                                    moduleAuthor.decorate!.fan?.color
+                                            ?.startsWith('#') ==
+                                        true
+                                    ? Utils.parseColor(
+                                        moduleAuthor.decorate!.fan!.color!,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ),
                       ],
-                    )
-                  : _moreWidget(context),
-        )
+                    ),
+                    _moreWidget(context),
+                  ],
+                )
+              : _moreWidget(context),
+        ),
       ],
     );
   }
@@ -208,8 +208,8 @@ class AuthorPanel extends StatelessWidget {
           height: 32,
           child: IconButton(
             tooltip: '更多',
-            style: ButtonStyle(
-              padding: WidgetStateProperty.all(EdgeInsets.zero),
+            style: const ButtonStyle(
+              padding: WidgetStatePropertyAll(EdgeInsets.zero),
             ),
             onPressed: () => morePanel(context),
             icon: const Icon(Icons.more_vert_outlined, size: 18),
@@ -220,14 +220,16 @@ class AuthorPanel extends StatelessWidget {
     String? bvid;
     try {
       String? getBvid(String? type, DynamicMajorModel? major) => switch (type) {
-            'DYNAMIC_TYPE_AV' => major?.archive?.bvid,
-            'DYNAMIC_TYPE_UGC_SEASON' => major?.ugcSeason?.bvid,
-            _ => null,
-          };
+        'DYNAMIC_TYPE_AV' => major?.archive?.bvid,
+        'DYNAMIC_TYPE_UGC_SEASON' => major?.ugcSeason?.bvid,
+        _ => null,
+      };
       bvid = getBvid(item.type, item.modules.moduleDynamic?.major);
       if (bvid == null && item.orig != null) {
-        bvid =
-            getBvid(item.orig!.type, item.orig?.modules.moduleDynamic?.major);
+        bvid = getBvid(
+          item.orig!.type,
+          item.orig!.modules.moduleDynamic?.major,
+        );
       }
     } catch (_) {}
 
@@ -240,29 +242,29 @@ class AuthorPanel extends StatelessWidget {
       ),
       builder: (context1) {
         final theme = Theme.of(context);
+        final moduleAuthor = item.modules.moduleAuthor!;
         return Padding(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.paddingOf(context1).bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewPaddingOf(context1).bottom,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               InkWell(
                 onTap: Get.back,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                ),
-                child: Container(
+                borderRadius: StyleString.bottomSheetRadius,
+                child: SizedBox(
                   height: 35,
-                  padding: const EdgeInsets.only(bottom: 2),
                   child: Center(
                     child: Container(
                       width: 32,
                       height: 3,
                       decoration: BoxDecoration(
-                          color: theme.colorScheme.outline,
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(3))),
+                        color: theme.colorScheme.outline,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(3),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -303,7 +305,8 @@ class AuthorPanel extends StatelessWidget {
                 onTap: () {
                   Get.back();
                   Utils.shareText(
-                      '${HttpString.dynamicShareBaseUrl}/${item.idStr}');
+                    '${HttpString.dynamicShareBaseUrl}/${item.idStr}',
+                  );
                 },
                 minLeadingWidth: 0,
               ),
@@ -322,20 +325,13 @@ class AuthorPanel extends StatelessWidget {
                       bool isDyn = item.basic!.commentType == 17;
                       String id = isDyn ? item.idStr : item.basic!.ridStr!;
                       int source = isDyn ? 11 : 2;
-                      String title;
-                      if (item.modules.moduleDynamic?.desc != null) {
-                        title = item.modules.moduleDynamic!.desc!.text!;
-                      } else if (item.modules.moduleDynamic?.major != null) {
-                        title = item
-                            .modules.moduleDynamic!.major!.opus!.summary!.text!;
-                      } else {
-                        throw UnsupportedError(
-                            'error getting title: {"type": ${item.basic!.commentType}, "id": $id}');
-                      }
+                      final moduleDynamic = item.modules.moduleDynamic!;
+                      final title =
+                          moduleDynamic.desc?.text ??
+                          moduleDynamic.major!.opus!.summary!.text!;
                       String? thumb = isDyn
-                          ? item.modules.moduleAuthor?.face
-                          : item.modules.moduleDynamic?.major?.opus?.pics
-                              ?.firstOrNull?.url;
+                          ? moduleAuthor.face
+                          : moduleDynamic.major?.opus?.pics?.firstOrNull?.url;
                       PageUtils.pmShare(
                         context,
                         content: {
@@ -344,8 +340,8 @@ class AuthorPanel extends StatelessWidget {
                           "headline": "",
                           "source": source,
                           if (thumb?.isNotEmpty == true) "thumb": thumb,
-                          "author": item.modules.moduleAuthor!.name,
-                          "author_id": item.modules.moduleAuthor!.mid.toString()
+                          "author": moduleAuthor.name,
+                          "author_id": moduleAuthor.mid.toString(),
                         },
                       );
                     } catch (e) {
@@ -356,7 +352,7 @@ class AuthorPanel extends StatelessWidget {
                 ),
               ListTile(
                 title: Text(
-                  '临时屏蔽：${item.modules.moduleAuthor?.name}',
+                  '临时屏蔽：${moduleAuthor.name}',
                   style: theme.textTheme.titleSmall,
                 ),
                 leading: const Icon(Icons.visibility_off_outlined, size: 19),
@@ -364,21 +360,24 @@ class AuthorPanel extends StatelessWidget {
                   Get.back();
                   onBlock?.call();
                   try {
-                    Get.find<DynamicsController>()
-                        .tempBannedList
-                        .add(item.modules.moduleAuthor!.mid!);
+                    Get.find<DynamicsController>().tempBannedList.add(
+                      moduleAuthor.mid!,
+                    );
                     SmartDialog.showToast(
-                        '已临时屏蔽${item.modules.moduleAuthor?.name}(${item.modules.moduleAuthor!.mid!})，重启恢复');
+                      '已临时屏蔽${moduleAuthor.name}(${moduleAuthor.mid!})，重启恢复',
+                    );
                   } catch (_) {}
                 },
                 minLeadingWidth: 0,
               ),
-              if (item.modules.moduleAuthor?.mid == Accounts.main.mid) ...[
+              if (kDebugMode || moduleAuthor.mid == Accounts.main.mid) ...[
                 ListTile(
                   onTap: () {
                     Get.back();
                     RequestUtils.checkCreatedDyn(
-                        id: item.idStr, isManual: true);
+                      id: item.idStr,
+                      isManual: true,
+                    );
                   },
                   minLeadingWidth: 0,
                   leading: const Stack(
@@ -396,13 +395,16 @@ class AuthorPanel extends StatelessWidget {
                     onTap: () {
                       Get.back();
                       onSetTop!(
-                          item.modules.moduleTag?.text != null, item.idStr);
+                        item.modules.moduleTag?.text != null,
+                        item.idStr,
+                      );
                     },
                     minLeadingWidth: 0,
                     leading: const Icon(Icons.vertical_align_top, size: 19),
                     title: Text(
-                        '${item.modules.moduleTag?.text != null ? '取消' : ''}置顶',
-                        style: theme.textTheme.titleSmall!),
+                      '${item.modules.moduleTag?.text != null ? '取消' : ''}置顶',
+                      style: theme.textTheme.titleSmall!,
+                    ),
                   ),
                 if (onRemove != null)
                   ListTile(
@@ -434,11 +436,17 @@ class AuthorPanel extends StatelessWidget {
                       );
                     },
                     minLeadingWidth: 0,
-                    leading: Icon(Icons.delete_outline,
-                        color: theme.colorScheme.error, size: 19),
-                    title: Text('删除',
-                        style: theme.textTheme.titleSmall!
-                            .copyWith(color: theme.colorScheme.error)),
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                      size: 19,
+                    ),
+                    title: Text(
+                      '删除',
+                      style: theme.textTheme.titleSmall!.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
                   ),
               ],
               if (Accounts.main.isLogin)
@@ -462,15 +470,16 @@ class AuthorPanel extends StatelessWidget {
                       (reasonType, reasonDesc, banUid) {
                         if (banUid) {
                           VideoHttp.relationMod(
-                            mid: item.modules.moduleAuthor!.mid!,
+                            mid: moduleAuthor.mid!,
                             act: 5,
                             reSrc: 11,
                           );
                         }
                         return UserHttp.dynamicReport(
-                          mid: item.modules.moduleAuthor!.mid,
+                          mid: moduleAuthor.mid,
                           dynId: item.idStr,
                           reasonType: reasonType,
+                          reasonDesc: reasonType == 0 ? reasonDesc : null,
                         );
                       },
                     );

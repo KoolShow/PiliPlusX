@@ -1,30 +1,29 @@
-import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
-import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/media_list/media_list.dart';
-import 'package:PiliPlus/pages/common/common_collapse_slide_page.dart';
+import 'package:PiliPlus/models_new/video/video_detail/episode.dart';
+import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart' hide RefreshCallback;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
-class MediaListPanel extends CommonCollapseSlidePage {
+class MediaListPanel extends CommonSlidePage {
   const MediaListPanel({
     super.key,
     required this.mediaList,
-    this.changeMediaList,
+    required this.onChangeEpisode,
     this.panelTitle,
-    required this.getBvId,
+    required this.bvid,
     required this.loadMoreMedia,
     required this.count,
     required this.desc,
@@ -33,50 +32,33 @@ class MediaListPanel extends CommonCollapseSlidePage {
     this.onDelete,
   });
 
-  final List<MediaListItemModel> mediaList;
-  final Function? changeMediaList;
+  final RxList<MediaListItemModel> mediaList;
+  final ValueChanged<BaseEpisodeItem> onChangeEpisode;
   final String? panelTitle;
-  final Function getBvId;
+  final String bvid;
   final VoidCallback loadMoreMedia;
   final int? count;
   final bool desc;
   final VoidCallback onReverse;
   final RefreshCallback? loadPrevious;
-  final ValueChanged<int>? onDelete;
+  final void Function(MediaListItemModel item, int index)? onDelete;
 
   @override
   State<MediaListPanel> createState() => _MediaListPanelState();
 }
 
-class _MediaListPanelState
-    extends CommonCollapseSlidePageState<MediaListPanel> {
-  final _scrollController = ItemScrollController();
-  late RxBool desc;
+class _MediaListPanelState extends State<MediaListPanel>
+    with SingleTickerProviderStateMixin, CommonSlideMixin {
+  late final ScrollController _controller;
 
   @override
   void initState() {
     super.initState();
-    desc = widget.desc.obs;
-  }
-
-  @override
-  void init() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        int index = widget.mediaList
-            .indexWhere((item) => item.bvid == widget.getBvId());
-        if (index > 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            try {
-              _scrollController.jumpTo(index: index);
-            } catch (_) {}
-          });
-        }
-        setState(() {
-          isInit = false;
-        });
-      }
-    });
+    final bvid = widget.bvid;
+    final bvIndex = widget.mediaList.indexWhere((item) => item.bvid == bvid);
+    _controller = ScrollController(
+      initialScrollOffset: bvIndex <= 0 ? 0 : bvIndex * 100.0 + 7,
+    );
   }
 
   @override
@@ -86,34 +68,37 @@ class _MediaListPanelState
       child: Column(
         children: [
           AppBar(
+            primary: false,
             toolbarHeight: 45,
             automaticallyImplyLeading: false,
             titleSpacing: 16,
             title: Text(widget.panelTitle ?? '稍后再看'),
+            backgroundColor: Colors.transparent,
             actions: [
-              Obx(
-                () => mediumButton(
-                  tooltip: desc.value ? '顺序播放' : '倒序播放',
-                  icon: desc.value
-                      ? MdiIcons.sortAscending
-                      : MdiIcons.sortDescending,
-                  onPressed: () {
-                    widget.onReverse();
-                    desc.value = !desc.value;
-                  },
-                ),
+              iconButton(
+                iconSize: 20,
+                tooltip: widget.desc ? '顺序播放' : '倒序播放',
+                icon: widget.desc
+                    ? const Icon(MdiIcons.sortAscending)
+                    : const Icon(MdiIcons.sortDescending),
+                onPressed: () {
+                  Get.back();
+                  widget.onReverse();
+                },
               ),
-              mediumButton(
+              iconButton(
+                iconSize: 20,
                 tooltip: '关闭',
-                icon: Icons.close,
+                icon: const Icon(Icons.close),
                 onPressed: Get.back,
               ),
               const SizedBox(width: 14),
             ],
-          ),
-          Divider(
-            height: 1,
-            color: theme.colorScheme.outline.withValues(alpha: 0.1),
+            shape: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outline.withValues(alpha: 0.1),
+              ),
+            ),
           ),
           Expanded(
             child: enableSlide ? slideList(theme) : buildList(theme),
@@ -133,186 +118,195 @@ class _MediaListPanelState
         : _buildList(theme);
   }
 
-  Widget _buildList(ThemeData theme) => Obx(
-        () {
-          final showDelBtn =
-              widget.onDelete != null && widget.mediaList.length > 1;
-          return ScrollablePositionedList.separated(
-            itemScrollController: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: widget.mediaList.length,
-            padding: EdgeInsets.only(
-              top: 7,
-              bottom: MediaQuery.paddingOf(context).bottom + 80,
+  Widget _buildList(ThemeData theme) {
+    final showDelBtn = widget.onDelete != null && widget.mediaList.length > 1;
+    return CustomScrollView(
+      controller: _controller,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.only(
+            top: 7,
+            bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+          ),
+          sliver: Obx(
+            () => SliverFixedExtentList.builder(
+              itemExtent: 100,
+              itemCount: widget.mediaList.length,
+              itemBuilder: (context, index) {
+                if (index == widget.mediaList.length - 1 &&
+                    (widget.count == null ||
+                        widget.mediaList.length < widget.count!)) {
+                  widget.loadMoreMedia();
+                }
+                var item = widget.mediaList[index];
+                final isCurr = item.bvid == widget.bvid;
+                return _buildItem(theme, index, item, isCurr, showDelBtn);
+              },
             ),
-            itemBuilder: ((context, index) {
-              var item = widget.mediaList[index];
-              if (index == widget.mediaList.length - 1 &&
-                  (widget.count == null ||
-                      widget.mediaList.length < widget.count!)) {
-                widget.loadMoreMedia();
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItem(
+    ThemeData theme,
+    int index,
+    MediaListItemModel item,
+    bool isCurr,
+    bool showDelBtn,
+  ) {
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+      aid: item.aid,
+      bvid: item.bvid,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: SizedBox(
+        height: 98,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: () {
+              if (item.type != 2) {
+                SmartDialog.showToast('不支持播放该类型视频');
+                return;
               }
-              final isCurr = item.bvid == widget.getBvId();
-              return SizedBox(
-                height: 98,
-                child: InkWell(
-                  onTap: () async {
-                    if (item.type != 2) {
-                      SmartDialog.showToast('不支持播放该类型视频');
-                      return;
-                    }
-                    Get.back();
-                    String bvid = item.bvid!;
-                    int? aid = item.aid;
-                    String cover = item.cover ?? '';
-                    final int? cid =
-                        item.cid ?? await SearchHttp.ab2c(aid: aid, bvid: bvid);
-                    if (cid != null) {
-                      widget.changeMediaList?.call(bvid, cid, aid, cover);
-                    }
-                  },
-                  onLongPress: () => imageSaveDialog(
-                    title: item.title,
-                    cover: item.cover,
-                    aid: item.aid,
-                    bvid: item.bvid,
+              Get.back();
+              widget.onChangeEpisode(item);
+            },
+            onLongPress: onLongPress,
+            onSecondaryTap: Utils.isMobile ? null : onLongPress,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
                   ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          NetworkImgLayer(
+                            src: item.cover,
+                            width: 140.8,
+                            height: 88,
+                          ),
+                          if (item.badge?.isNotEmpty == true)
+                            PBadge(
+                              text: item.badge,
+                              right: 6.0,
+                              top: 6.0,
+                              type: switch (item.badge) {
+                                '充电专属' => PBadgeType.error,
+                                _ => PBadgeType.primary,
+                              },
+                            ),
+                          PBadge(
+                            text: DurationUtils.formatDuration(
+                              item.duration,
+                            ),
+                            right: 6.0,
+                            bottom: 6.0,
+                            type: PBadgeType.gray,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            AspectRatio(
-                              aspectRatio: StyleString.aspectRatio,
-                              child: LayoutBuilder(
-                                builder: (context, boxConstraints) {
-                                  return Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      NetworkImgLayer(
-                                        src: item.cover,
-                                        width: boxConstraints.maxWidth,
-                                        height: boxConstraints.maxHeight,
-                                      ),
-                                      if (item.badge?.text?.isNotEmpty == true)
-                                        PBadge(
-                                          text: item.badge?.text,
-                                          right: 6.0,
-                                          top: 6.0,
-                                          type: switch (item.badge?.text) {
-                                            '充电专属' => PBadgeType.error,
-                                            _ => PBadgeType.primary,
-                                          },
-                                        ),
-                                      PBadge(
-                                        text: Utils.timeFormat(item.duration!),
-                                        right: 6.0,
-                                        bottom: 6.0,
-                                        type: PBadgeType.gray,
-                                      ),
-                                    ],
-                                  );
-                                },
+                            Text(
+                              item.title!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: isCurr ? FontWeight.bold : null,
+                                color: isCurr
+                                    ? theme.colorScheme.primary
+                                    : null,
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.title!,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontWeight:
-                                          isCurr ? FontWeight.bold : null,
-                                      color: isCurr
-                                          ? theme.colorScheme.primary
-                                          : null,
-                                    ),
-                                  ),
-                                  if (item.type == 24 &&
-                                      item.intro?.isNotEmpty == true) ...[
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      item.intro!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: theme.colorScheme.outline,
-                                      ),
-                                    ),
-                                  ],
-                                  const Spacer(),
-                                  Text(
-                                    item.upper!.name!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.colorScheme.outline,
-                                    ),
-                                  ),
-                                  if (item.type == 2) ...[
-                                    const SizedBox(height: 3),
-                                    Row(
-                                      spacing: 8,
-                                      children: [
-                                        StatWidget(
-                                          type: StatType.play,
-                                          value: item.cntInfo!.play,
-                                        ),
-                                        StatWidget(
-                                          type: StatType.danmaku,
-                                          value: item.cntInfo!.danmaku,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
+                            if (item.type == 24 &&
+                                item.intro?.isNotEmpty == true) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                item.intro!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.outline,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (showDelBtn && !isCurr)
-                        Positioned(
-                          right: 12,
-                          bottom: -6,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () => showConfirmDialog(
-                              context: context,
-                              title: '确定移除该视频？',
-                              onConfirm: () => widget.onDelete!(index),
-                            ),
-                            onLongPress: () => widget.onDelete!(index),
-                            child: Padding(
-                              padding: const EdgeInsets.all(9),
-                              child: Icon(
-                                Icons.clear,
-                                size: 18,
+                            ],
+                            const Spacer(),
+                            Text(
+                              item.upper!.name!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
                                 color: theme.colorScheme.outline,
                               ),
                             ),
-                          ),
+                            if (item.type == 2) ...[
+                              const SizedBox(height: 3),
+                              Row(
+                                spacing: 8,
+                                children: [
+                                  StatWidget(
+                                    type: StatType.play,
+                                    value: item.cntInfo!.play,
+                                  ),
+                                  StatWidget(
+                                    type: StatType.danmaku,
+                                    value: item.cntInfo!.danmaku,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
+                      ),
                     ],
                   ),
                 ),
-              );
-            }),
-            separatorBuilder: (context, index) => const SizedBox(height: 2),
-          );
-        },
-      );
+                if (showDelBtn && !isCurr)
+                  Positioned(
+                    right: 12,
+                    bottom: -6,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => showConfirmDialog(
+                        context: context,
+                        title: '确定移除该视频？',
+                        onConfirm: () => widget.onDelete!(item, index),
+                      ),
+                      onLongPress: () => widget.onDelete!(item, index),
+                      child: Padding(
+                        padding: const EdgeInsets.all(9),
+                        child: Icon(
+                          Icons.clear,
+                          size: 18,
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -1,8 +1,9 @@
+import 'package:PiliPlus/models/model_avatar.dart';
 import 'package:PiliPlus/models/model_owner.dart';
 import 'package:PiliPlus/models/model_video.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/em.dart';
 import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/utils.dart';
 
 abstract class SearchNumData<T> {
   SearchNumData({
@@ -22,30 +23,24 @@ class SearchAllData extends SearchNumData {
 
   SearchAllData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
-    if ((json['result'] as List?)?.isNotEmpty == true) {
+    if (json['result'] case List result) {
       final isRefresh = json['page'] == 1;
       list = [];
-      for (final item in json['result']) {
-        if ((item['data'] as List?)?.isNotEmpty == true) {
+      for (final item in result) {
+        if (item['data'] case List data) {
           switch (item['result_type']) {
             case 'media_bangumi' || 'media_bangumi':
               if (isRefresh) {
-                list!.add((item['data'] as List)
-                    .map((e) => SearchPgcItemModel.fromJson(e))
-                    .toList());
+                list!.addAll(data.map((e) => SearchPgcItemModel.fromJson(e)));
               }
               break;
             case 'bili_user':
               if (isRefresh) {
-                list!.addAll((item['data'] as List)
-                    .map((e) => SearchUserItemModel.fromJson(e))
-                    .toList());
+                list!.addAll(data.map((e) => SearchUserItemModel.fromJson(e)));
               }
               break;
             case 'video':
-              list!.addAll((item['data'] as List)
-                  .map((e) => SearchVideoItemModel.fromJson(e))
-                  .toList());
+              list!.addAll(data.map((e) => SearchVideoItemModel.fromJson(e)));
               break;
           }
         }
@@ -63,8 +58,7 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
   SearchVideoData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
     list = (json['result'] as List?)
-        ?.where((e) => e['available'] == true)
-        .map<SearchVideoItemModel>((e) => SearchVideoItemModel.fromJson(e))
+        ?.map<SearchVideoItemModel>((e) => SearchVideoItemModel.fromJson(e))
         .toList();
   }
 }
@@ -75,6 +69,7 @@ class SearchVideoItemModel extends BaseVideoItemModel {
   String? arcurl;
   String? tag;
   int? ctime;
+  int? isUnionVideo;
 
   List<({bool isEm, String text})>? titleList;
 
@@ -90,9 +85,10 @@ class SearchVideoItemModel extends BaseVideoItemModel {
     cover = (json['pic'] as String?)?.http2https;
     pubdate = json['pubdate'];
     ctime = json['senddate'];
-    duration = Utils.duration(json['duration']);
+    duration = DurationUtils.parseDuration(json['duration']);
     owner = SearchOwner.fromJson(json);
     stat = SearchStat.fromJson(json);
+    isUnionVideo = json['is_union_video'];
   }
 }
 
@@ -169,7 +165,7 @@ class SearchUserItemModel {
   int? isUpUser;
   int? isLive;
   int? roomId;
-  Map? officialVerify;
+  BaseOfficialVerify? officialVerify;
   int? isSeniorMember;
 
   SearchUserItemModel.fromJson(Map<String, dynamic> json) {
@@ -188,7 +184,9 @@ class SearchUserItemModel {
     isUpUser = json['is_upuser'];
     isLive = json['is_live'];
     roomId = json['room_id'];
-    officialVerify = json['official_verify'];
+    officialVerify = json['official_verify'] == null
+        ? null
+        : BaseOfficialVerify.fromJson(json['official_verify']);
     isSeniorMember = json['is_senior_member'];
   }
 }
@@ -427,7 +425,7 @@ class SearchArticleItemModel {
     subTitle = title.map((e) => e.text).join();
     rankOffset = json['rank_offset'];
     mid = json['mid'];
-    imageUrls = (json['image_urls'] as List?)?.cast();
+    imageUrls = (json['image_urls'] as List?)?.fromCast();
     id = json['id'];
     categoryId = json['category_id'];
     view = json['view'];

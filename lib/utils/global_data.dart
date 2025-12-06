@@ -1,15 +1,19 @@
-class GlobalData {
-  int imgQuality = 10;
+import 'package:PiliPlus/utils/storage_pref.dart';
 
-  int replyLengthLimit = 6;
+class GlobalData {
+  int imgQuality = Pref.picQuality;
 
   num? coins;
 
-  void afterCoin(int coin) {
+  void afterCoin(num coin) {
     if (coins != null) {
       coins = coins! - coin;
     }
   }
+
+  Set<int> blackMids = Pref.blackMids;
+
+  bool dynamicsWaterfallFlow = Pref.dynamicsWaterfallFlow;
 
   // 私有构造函数
   GlobalData._();

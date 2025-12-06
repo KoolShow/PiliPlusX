@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:PiliPlus/http/init.dart';
+import 'package:PiliPlus/http/ua_type.dart';
+import 'package:PiliPlus/main.dart';
 import 'package:PiliPlus/models/common/webview_menu_type.dart';
-import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/cache_manage.dart';
+import 'package:PiliPlus/utils/cache_manager.dart';
+import 'package:PiliPlus/utils/login_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -22,7 +22,7 @@ class WebviewPage extends StatefulWidget {
   // note
   final int? oid;
   final String? title;
-  final String? uaType;
+  final UaType? uaType;
 
   @override
   State<WebviewPage> createState() => _WebviewPageState();
@@ -30,20 +30,29 @@ class WebviewPage extends StatefulWidget {
 
 class _WebviewPageState extends State<WebviewPage> {
   late final String _url = widget.url ?? Get.parameters['url'] ?? '';
-  late final uaType = widget.uaType ?? Get.parameters['uaType'] ?? 'mob';
+  late final UaType uaType;
   final RxString title = ''.obs;
   final RxDouble progress = 1.0.obs;
-  bool? _inApp;
+  bool _inApp = false;
   bool _off = false;
 
   InAppWebViewController? _webViewController;
 
+  static final _prefixRegex = RegExp(
+    r'^(?!(https?://))\S+://',
+    caseSensitive: false,
+  );
+
   @override
   void initState() {
     super.initState();
-    if (Get.arguments is Map) {
-      _inApp = Get.arguments['inApp'];
-      _off = Get.arguments['off'] ?? false;
+    late final uaType = Get.parameters['uaType'];
+    this.uaType =
+        widget.uaType ??
+        (uaType != null ? UaType.values.byName(uaType) : UaType.platformUA);
+    if (Get.arguments case Map map) {
+      _inApp = map['inApp'] ?? false;
+      _off = map['off'] ?? false;
     }
   }
 
@@ -55,6 +64,17 @@ class _WebviewPageState extends State<WebviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (Platform.isLinux) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: TextButton(
+            onPressed: () => PageUtils.launchURL(_url),
+            child: const Text('unsupported'),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: widget.url != null
           ? null
@@ -110,41 +130,37 @@ class _WebviewPageState extends State<WebviewPage> {
                         }
                         break;
                       case WebviewMenuItem.resetCookie:
-                        final cookies = Accounts.main.cookieJar.toList();
-                        for (var item in cookies) {
-                          await CookieManager().setCookie(
-                            url: WebUri(item.domain ?? ''),
-                            name: item.name,
-                            value: item.value,
-                            path: item.path ?? '',
-                            domain: item.domain,
-                            isSecure: item.secure,
-                            isHttpOnly: item.httpOnly,
-                          );
-                        }
+                        await LoginUtils.setWebCookie();
                         SmartDialog.showToast('设置成功，刷新或重新打开网页');
                         break;
                     }
                   },
                   itemBuilder: (context) => <PopupMenuEntry<WebviewMenuItem>>[
                     ...WebviewMenuItem.values
-                        .sublist(0, WebviewMenuItem.values.length - 1)
-                        .map((item) => PopupMenuItem(
-                            value: item, child: Text(item.title))),
+                        .take(WebviewMenuItem.values.length - 1)
+                        .map(
+                          (item) => PopupMenuItem(
+                            value: item,
+                            child: Text(item.title),
+                          ),
+                        ),
                     const PopupMenuDivider(),
                     PopupMenuItem(
-                        value: WebviewMenuItem.goBack,
-                        child: Text(
-                          WebviewMenuItem.goBack.title,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error),
-                        )),
+                      value: WebviewMenuItem.goBack,
+                      child: Text(
+                        WebviewMenuItem.goBack.title,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
                   ],
-                )
+                ),
               ],
             ),
       body: SafeArea(
         child: InAppWebView(
+          webViewEnvironment: webViewEnvironment,
           initialSettings: InAppWebViewSettings(
             clearCache: true,
             javaScriptEnabled: true,
@@ -152,11 +168,12 @@ class _WebviewPageState extends State<WebviewPage> {
             useHybridComposition: false,
             algorithmicDarkeningAllowed: true,
             useShouldOverrideUrlLoading: true,
-            userAgent: Request.headerUa(type: uaType),
+            userAgent: uaType.ua,
             mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
           ),
-          initialUrlRequest:
-              URLRequest(url: WebUri.uri(Uri.tryParse(_url) ?? Uri())),
+          initialUrlRequest: URLRequest(
+            url: WebUri.uri(Uri.tryParse(_url) ?? Uri()),
+          ),
           onWebViewCreated: (InAppWebViewController controller) {
             _webViewController = controller;
             controller
@@ -171,9 +188,7 @@ class _WebviewPageState extends State<WebviewPage> {
                 callback: (args) async {
                   WebUri? uri = await controller.getUrl();
                   if (uri != null) {
-                    String? oid = RegExp(r'oid=(\d+)')
-                        .firstMatch(uri.toString())
-                        ?.group(1);
+                    String? oid = uri.queryParameters['oid'];
                     if (oid != null) {
                       PiliScheme.videoPush(int.parse(oid), null);
                     }
@@ -192,16 +207,20 @@ class _WebviewPageState extends State<WebviewPage> {
             final url = uri.toString();
             if (url.startsWith('https://www.bilibili.com/h5/note-app')) {
               controller
-                ..evaluateJavascript(source: """
+                ..evaluateJavascript(
+                  source: """
   document.querySelector('.finish-btn').addEventListener('click', function() {
       window.flutter_inappwebview.callHandler('finishButtonClicked');
   });
-""")
-                ..evaluateJavascript(source: """
+""",
+                )
+                ..evaluateJavascript(
+                  source: """
   document.querySelector('.info-bar').addEventListener('click', function() {
       window.flutter_inappwebview.callHandler('infoBarClicked');
   });
-""");
+""",
+                );
             } else if (url.startsWith('https://live.bilibili.com')) {
               controller.evaluateJavascript(
                 source: '''
@@ -220,38 +239,47 @@ class _WebviewPageState extends State<WebviewPage> {
           onDownloadStartRequest: Platform.isAndroid
               ? (controller, request) {
                   showDialog(
-                      context: context,
-                      builder: (context) {
-                        String suggestedFilename =
-                            request.suggestedFilename.toString();
-                        String fileSize = CacheManage.formatSize(
-                            request.contentLength.toDouble());
-                        try {
-                          suggestedFilename =
-                              Uri.decodeComponent(suggestedFilename);
-                        } catch (e) {
-                          if (kDebugMode) debugPrint(e.toString());
-                        }
-                        return AlertDialog(
-                          title: Text(
-                            '下载文件: $suggestedFilename ?',
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          content: SelectableText(request.url.toString()),
-                          actions: [
-                            TextButton(
-                              onPressed: Get.back,
-                              child: const Text('取消'),
-                            ),
-                            TextButton(
-                                onPressed: () {
-                                  Get.back();
-                                  PageUtils.launchURL(request.url.toString());
-                                },
-                                child: Text('确定 ($fileSize)')),
-                          ],
+                    context: context,
+                    builder: (context) {
+                      String suggestedFilename = request.suggestedFilename
+                          .toString();
+                      String fileSize = CacheManager.formatSize(
+                        request.contentLength.toDouble(),
+                      );
+                      try {
+                        suggestedFilename = Uri.decodeComponent(
+                          suggestedFilename,
                         );
-                      });
+                      } catch (e) {
+                        if (kDebugMode) debugPrint(e.toString());
+                      }
+                      return AlertDialog(
+                        title: Text(
+                          '下载文件: $suggestedFilename ?',
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                        content: SelectableText(request.url.toString()),
+                        actions: [
+                          TextButton(
+                            onPressed: Get.back,
+                            child: Text(
+                              '取消',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Get.back();
+                              PageUtils.launchURL(request.url.toString());
+                            },
+                            child: Text('确定 ($fileSize)'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
                   progress.value = 1;
                 }
               : null,
@@ -260,23 +288,25 @@ class _WebviewPageState extends State<WebviewPage> {
             if (url.startsWith('//api.bilibili.com/x/note/add') &&
                 widget.title != null) {
               return ajaxRequest
-                ..data = ajaxRequest.data
-                    .toString()
-                    .replaceFirst('&title=--&', '&title=${widget.title}&');
+                ..data = ajaxRequest.data.toString().replaceFirst(
+                  '&title=--&',
+                  '&title=${widget.title}&',
+                );
             }
             return null;
           },
           shouldInterceptRequest: (controller, request) async {
             String url = request.url.toString();
             if (url.startsWith(
-                'https://passport.bilibili.com/x/passport-login/web')) {
+              'https://passport.bilibili.com/x/passport-login/web',
+            )) {
               progress.value = 1;
               return WebResourceResponse();
             }
             return null;
           },
           shouldOverrideUrlLoading: (controller, navigationAction) async {
-            if (_inApp == true) {
+            if (_inApp) {
               return NavigationActionPolicy.ALLOW;
             }
             late String url = navigationAction.request.url.toString();
@@ -289,12 +319,12 @@ class _WebviewPageState extends State<WebviewPage> {
             if (hasMatch) {
               progress.value = 1;
               return NavigationActionPolicy.CANCEL;
-            } else if (RegExp(r'^(?!(https?://))\S+://', caseSensitive: false)
-                .hasMatch(url)) {
+            } else if (_prefixRegex.hasMatch(url)) {
               if (context.mounted) {
                 SnackBar snackBar = SnackBar(
                   content: const Text('当前网页将要打开外部链接，是否打开'),
                   showCloseIcon: true,
+                  persist: false,
                   action: SnackBarAction(
                     label: '打开',
                     onPressed: () => PageUtils.launchURL(url),

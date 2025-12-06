@@ -1,26 +1,29 @@
 import 'dart:math';
 
+import 'package:PiliPlus/common/widgets/interactiveviewer_gallery/hero_dialog_route.dart';
 import 'package:PiliPlus/common/widgets/interactiveviewer_gallery/interactiveviewer_gallery.dart';
 import 'package:PiliPlus/grpc/im.dart';
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/search.dart';
+import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/image_preview_type.dart';
-import 'package:PiliPlus/models/common/search_type.dart';
+import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
-import 'package:PiliPlus/models_new/pgc/pgc_info_model/section.dart';
+import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/contact/view.dart';
 import 'package:PiliPlus/pages/fav_panel/view.dart';
 import 'package:PiliPlus/pages/share/view.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/widgets/menu_row.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
+import 'package:PiliPlus/utils/context_ext.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/url_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:floating/floating.dart';
@@ -28,12 +31,34 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide ContextExtensionss;
 import 'package:url_launcher/url_launcher.dart';
 
-class PageUtils {
-  static Future<void> pmShare(BuildContext context,
-      {required Map content}) async {
+abstract class PageUtils {
+  static final RouteObserver<PageRoute> routeObserver =
+      RouteObserver<PageRoute>();
+
+  static Future<void> imageView({
+    int initialPage = 0,
+    required List<SourceModel> imgList,
+    int? quality,
+  }) {
+    return Get.key.currentState!.push<void>(
+      HeroDialogRoute(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            InteractiveviewerGallery(
+              sources: imgList,
+              initIndex: initialPage,
+              quality: quality ?? GlobalData().imgQuality,
+            ),
+      ),
+    );
+  }
+
+  static Future<void> pmShare(
+    BuildContext context, {
+    required Map content,
+  }) async {
     // if (kDebugMode) debugPrint(content.toString());
 
     int? selectedIndex;
@@ -41,13 +66,15 @@ class PageUtils {
 
     final shareListRes = await ImGrpc.shareList(size: 3);
     if (shareListRes.isSuccess && shareListRes.data.sessionList.isNotEmpty) {
-      userList.addAll(shareListRes.data.sessionList
-          .map<UserModel>((item) => UserModel(
-                mid: item.talkerId.toInt(),
-                name: item.talkerUname,
-                avatar: item.talkerIcon,
-              ))
-          .toList());
+      userList.addAll(
+        shareListRes.data.sessionList.map<UserModel>(
+          (item) => UserModel(
+            mid: item.talkerId.toInt(),
+            name: item.talkerUname,
+            avatar: item.talkerIcon,
+          ),
+        ),
+      );
     } else if (context.mounted) {
       UserModel? userModel = await Navigator.of(context).push(
         GetPageRoute(page: () => const ContactPage()),
@@ -73,8 +100,11 @@ class PageUtils {
     }
   }
 
-  static void scheduleExit(BuildContext context, isFullScreen,
-      [bool isLive = false]) {
+  static void scheduleExit(
+    BuildContext context,
+    isFullScreen, [
+    bool isLive = false,
+  ]) {
     if (!context.mounted) {
       return;
     }
@@ -101,9 +131,7 @@ class PageUtils {
                       autofocus: true,
                       onChanged: (value) => duration = value,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'\d+')),
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(suffixText: 'min'),
                     ),
                     actions: [
@@ -118,8 +146,9 @@ class PageUtils {
                         onPressed: () {
                           Get.back();
                           int choice = int.tryParse(duration) ?? 0;
-                          shutdownTimerService.scheduledExitInMinutes = choice;
-                          shutdownTimerService.startShutdownTimer();
+                          shutdownTimerService
+                            ..scheduledExitInMinutes = choice
+                            ..startShutdownTimer();
                           setState(() {});
                         },
                         child: const Text('确定'),
@@ -138,28 +167,23 @@ class PageUtils {
           final ThemeData theme = Theme.of(context);
           return Theme(
             data: theme,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Material(
                 clipBehavior: Clip.hardEdge,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: const BorderRadius.all(Radius.circular(12)),
-                ),
-                margin: const EdgeInsets.all(12),
-                padding: const EdgeInsets.only(left: 14, right: 14),
+                color: theme.colorScheme.surface,
+                borderRadius: const BorderRadius.all(Radius.circular(12)),
                 child: ListView(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   children: [
-                    const SizedBox(height: 10),
                     const Center(child: Text('定时关闭', style: titleStyle)),
                     const SizedBox(height: 10),
                     ...[
                       ...[
                         ...scheduleTimeChoices,
                         if (!scheduleTimeChoices.contains(
-                            shutdownTimerService.scheduledExitInMinutes))
+                          shutdownTimerService.scheduledExitInMinutes,
+                        ))
                           shutdownTimerService.scheduledExitInMinutes,
                       ]..sort(),
                       -1,
@@ -167,84 +191,83 @@ class PageUtils {
                       (choice) => ListTile(
                         dense: true,
                         onTap: () => onTap(choice),
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(choice == -1
-                            ? '自定义'
-                            : choice == 0
-                                ? "禁用"
-                                : "$choice分钟后"),
-                        trailing: shutdownTimerService.scheduledExitInMinutes ==
+                        title: Text(
+                          choice == -1
+                              ? '自定义'
+                              : choice == 0
+                              ? "禁用"
+                              : "$choice分钟后",
+                          style: titleStyle,
+                        ),
+                        trailing:
+                            shutdownTimerService.scheduledExitInMinutes ==
                                 choice
                             ? Icon(
+                                size: 20,
                                 Icons.done,
                                 color: theme.colorScheme.primary,
                               )
                             : null,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    const Center(
-                      child: SizedBox(
-                        width: 125,
-                        child: Divider(height: 1),
-                      ),
-                    ),
                     if (!isLive) ...[
-                      const SizedBox(height: 10),
-                      ListTile(
-                        dense: true,
-                        onTap: () {
-                          shutdownTimerService.waitForPlayingCompleted =
-                              !shutdownTimerService.waitForPlayingCompleted;
-                          setState(() {});
+                      Builder(
+                        builder: (context) {
+                          return ListTile(
+                            dense: true,
+                            onTap: () {
+                              shutdownTimerService.waitForPlayingCompleted =
+                                  !shutdownTimerService.waitForPlayingCompleted;
+                              (context as Element).markNeedsBuild();
+                            },
+                            title: const Text("额外等待视频播放完毕", style: titleStyle),
+                            trailing: Transform.scale(
+                              alignment: Alignment.centerRight,
+                              scale: 0.8,
+                              child: Switch(
+                                value: shutdownTimerService
+                                    .waitForPlayingCompleted,
+                                onChanged: (value) {
+                                  shutdownTimerService.waitForPlayingCompleted =
+                                      value;
+                                  (context as Element).markNeedsBuild();
+                                },
+                              ),
+                            ),
+                          );
                         },
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text("额外等待视频播放完毕", style: titleStyle),
-                        trailing: Transform.scale(
-                          alignment: Alignment.centerRight,
-                          scale: 0.8,
-                          child: Switch(
-                            thumbIcon: WidgetStateProperty.resolveWith<Icon?>(
-                                (Set<WidgetState> states) {
-                              if (states.isNotEmpty &&
-                                  states.first == WidgetState.selected) {
-                                return const Icon(Icons.done);
-                              }
-                              return null;
-                            }),
-                            value: shutdownTimerService.waitForPlayingCompleted,
-                            onChanged: (value) => setState(() =>
-                                shutdownTimerService.waitForPlayingCompleted =
-                                    value),
-                          ),
-                        ),
                       ),
                     ],
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Text('倒计时结束:', style: titleStyle),
-                        const Spacer(),
-                        ActionRowLineItem(
-                          onTap: () {
-                            shutdownTimerService.exitApp = false;
-                            setState(() {});
-                          },
-                          text: " 暂停视频 ",
-                          selectStatus: !shutdownTimerService.exitApp,
-                        ),
-                        const Spacer(),
-                        ActionRowLineItem(
-                          onTap: () {
-                            shutdownTimerService.exitApp = true;
-                            setState(() {});
-                          },
-                          text: " 退出APP ",
-                          selectStatus: shutdownTimerService.exitApp,
-                        )
-                      ],
+                    Builder(
+                      builder: (context) {
+                        return Row(
+                          children: [
+                            const SizedBox(width: 18),
+                            const Text('倒计时结束:', style: titleStyle),
+                            const Spacer(),
+                            ActionRowLineItem(
+                              onTap: () {
+                                shutdownTimerService.exitApp = false;
+                                (context as Element).markNeedsBuild();
+                              },
+                              text: " 暂停视频 ",
+                              selectStatus: !shutdownTimerService.exitApp,
+                            ),
+                            const Spacer(),
+                            ActionRowLineItem(
+                              onTap: () {
+                                shutdownTimerService.exitApp = true;
+                                (context as Element).markNeedsBuild();
+                              },
+                              text: " 退出APP ",
+                              selectStatus: shutdownTimerService.exitApp,
+                            ),
+                            const SizedBox(width: 25),
+                          ],
+                        );
+                      },
                     ),
-                    const SizedBox(height: 10),
                   ],
                 ),
               ),
@@ -257,14 +280,14 @@ class PageUtils {
 
   static Future<void> pushDynFromId({id, rid, bool off = false}) async {
     SmartDialog.showLoading();
-    var res = await DynamicsHttp.dynamicDetail(
+    final res = await DynamicsHttp.dynamicDetail(
       id: id,
       rid: rid,
       type: rid != null ? 2 : null,
     );
     SmartDialog.dismiss();
-    if (res['status']) {
-      DynamicItemModel data = res['data'];
+    if (res.isSuccess) {
+      final data = res.data;
       if (data.basic?.commentType == 12) {
         toDupNamed(
           '/articlePage',
@@ -278,25 +301,24 @@ class PageUtils {
         toDupNamed(
           '/dynamicDetail',
           arguments: {
-            'item': res['data'],
+            'item': data,
           },
           off: off,
         );
       }
     } else {
-      SmartDialog.showToast(res['msg']);
+      res.toast();
     }
   }
 
   static void showFavBottomSheet({
     required BuildContext context,
-    required dynamic ctr,
+    required FavMixin ctr,
   }) {
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
-      sheetAnimationStyle: const AnimationStyle(curve: Curves.ease),
       constraints: BoxConstraints(
         maxWidth: min(640, context.mediaQueryShortestSide),
       ),
@@ -326,25 +348,28 @@ class PageUtils {
     );
   }
 
-  static void enterPip({int? width, int? height}) {
+  static void enterPip({int? width, int? height, bool isAuto = false}) {
     if (width != null && height != null) {
       Rational aspectRatio = Rational(width, height);
+      aspectRatio = aspectRatio.fitsInAndroidRequirements
+          ? aspectRatio
+          : height > width
+          ? const Rational.vertical()
+          : const Rational.landscape();
       Floating().enable(
-        EnableManual(
-          aspectRatio: aspectRatio.fitsInAndroidRequirements
-              ? aspectRatio
-              : height > width
-                  ? const Rational.vertical()
-                  : const Rational.landscape(),
-        ),
+        isAuto
+            ? AutoEnable(aspectRatio: aspectRatio)
+            : EnableManual(aspectRatio: aspectRatio),
       );
     } else {
-      Floating().enable(const EnableManual());
+      Floating().enable(isAuto ? const AutoEnable() : const EnableManual());
     }
   }
 
-  static Future<void> pushDynDetail(DynamicItemModel item, floor,
-      {action = 'all'}) async {
+  static Future<void> pushDynDetail(
+    DynamicItemModel item, {
+    bool isPush = false,
+  }) async {
     feedBack();
 
     void push() {
@@ -367,7 +392,7 @@ class PageUtils {
     }
 
     /// 点击评论action 直接查看评论
-    if (action == 'comment') {
+    if (isPush) {
       push();
       return;
     }
@@ -376,32 +401,43 @@ class PageUtils {
 
     switch (item.type) {
       case 'DYNAMIC_TYPE_AV':
-        if (item.modules.moduleDynamic?.major?.archive?.type == 2) {
-          if (item.modules.moduleDynamic!.major!.archive!.jumpUrl!
-              .startsWith('//')) {
-            item.modules.moduleDynamic!.major!.archive!.jumpUrl =
-                'https:${item.modules.moduleDynamic!.major!.archive!.jumpUrl!}';
+        final archive = item.modules.moduleDynamic!.major!.archive!;
+        // pgc
+        if (archive.type == 2) {
+          // jumpUrl
+          if (archive.jumpUrl case final jumpUrl?) {
+            if (viewPgcFromUri(jumpUrl)) {
+              return;
+            }
           }
-          String? redirectUrl = await UrlUtils.parseRedirectUrl(
-              item.modules.moduleDynamic!.major!.archive!.jumpUrl!, false);
-          if (redirectUrl != null) {
-            viewPgcFromUri(redirectUrl);
-            return;
+          // redirectUrl from intro
+          final res = await VideoHttp.videoIntro(bvid: archive.bvid!);
+          if (res.dataOrNull?.redirectUrl case final redirectUrl?) {
+            if (viewPgcFromUri(redirectUrl)) {
+              return;
+            }
+          }
+          // redirectUrl from jumpUrl
+          if (await UrlUtils.parseRedirectUrl(
+                archive.jumpUrl.http2https,
+                false,
+              )
+              case final redirectUrl?) {
+            if (viewPgcFromUri(redirectUrl)) {
+              return;
+            }
           }
         }
 
         try {
-          String bvid = item.modules.moduleDynamic!.major!.archive!.bvid!;
-          String cover = item.modules.moduleDynamic!.major!.archive!.cover!;
+          String bvid = archive.bvid!;
+          String cover = archive.cover!;
           int? cid = await SearchHttp.ab2c(bvid: bvid);
           if (cid != null) {
             toVideoPage(
-              'bvid=$bvid&cid=$cid',
-              arguments: {
-                'pic': cover,
-                'heroTag': Utils.makeHeroTag(bvid),
-              },
-              preventDuplicates: false,
+              bvid: bvid,
+              cid: cid,
+              cover: cover,
             );
           }
         } catch (err) {
@@ -411,34 +447,41 @@ class PageUtils {
 
       /// 专栏文章查看
       case 'DYNAMIC_TYPE_ARTICLE':
-        String? url = item.modules.moduleDynamic?.major?.opus?.jumpUrl;
-        if (url != null) {
-          if (url.contains('opus') || url.contains('read')) {
-            RegExp digitRegExp = RegExp(r'\d+');
-            Iterable<Match> matches = digitRegExp.allMatches(url);
-            String number = matches.first.group(0)!;
-            toDupNamed(
-              '/articlePage',
-              parameters: {
-                'id': number,
-                'type': url.split('//').last.split('/')[1],
-              },
-            );
-          } else {
-            handleWebview('https:$url');
-          }
-        }
-
+        toDupNamed(
+          '/articlePage',
+          parameters: {
+            'id': item.idStr,
+            'type': 'opus',
+          },
+        );
         break;
+
       case 'DYNAMIC_TYPE_PGC':
-        if (kDebugMode) debugPrint('番剧');
+        // if (kDebugMode) debugPrint('番剧');
         SmartDialog.showToast('暂未支持的类型，请联系开发者');
+        break;
+
+      case 'DYNAMIC_TYPE_LIVE':
+        DynamicLive2Model liveRcmd = item.modules.moduleDynamic!.major!.live!;
+        toLiveRoom(liveRcmd.id);
         break;
 
       case 'DYNAMIC_TYPE_LIVE_RCMD':
         DynamicLiveModel liveRcmd =
             item.modules.moduleDynamic!.major!.liveRcmd!;
-        toDupNamed('/liveRoom?roomid=${liveRcmd.roomId}');
+        toLiveRoom(liveRcmd.roomId);
+        break;
+
+      case 'DYNAMIC_TYPE_SUBSCRIPTION_NEW':
+        LivePlayInfo live = item
+            .modules
+            .moduleDynamic!
+            .major!
+            .subscriptionNew!
+            .liveRcmd!
+            .content!
+            .livePlayInfo!;
+        toLiveRoom(live.roomId);
         break;
 
       /// 合集查看
@@ -451,45 +494,49 @@ class PageUtils {
         int? cid = await SearchHttp.ab2c(bvid: bvid);
         if (cid != null) {
           toVideoPage(
-            'bvid=$bvid&cid=$cid',
-            arguments: {
-              'pic': cover,
-              'heroTag': Utils.makeHeroTag(bvid),
-            },
-            preventDuplicates: false,
+            aid: aid,
+            bvid: bvid,
+            cid: cid,
+            cover: cover,
           );
         }
         break;
 
       /// 番剧查看
       case 'DYNAMIC_TYPE_PGC_UNION':
-        if (kDebugMode) debugPrint('DYNAMIC_TYPE_PGC_UNION 番剧');
+        // if (kDebugMode) debugPrint('DYNAMIC_TYPE_PGC_UNION 番剧');
         DynamicArchiveModel pgc = item.modules.moduleDynamic!.major!.pgc!;
         if (pgc.epid != null) {
           viewPgc(epId: pgc.epid);
         }
         break;
+
       case 'DYNAMIC_TYPE_MEDIALIST':
-        if (item.modules.moduleDynamic?.major?.medialist != null) {
-          final String? url =
-              item.modules.moduleDynamic!.major!.medialist!.jumpUrl;
-          if (url?.contains('medialist/detail/ml') == true) {
-            Get.toNamed(
-              '/favDetail',
-              parameters: {
-                'heroTag':
-                    '${item.modules.moduleDynamic!.major!.medialist!.cover}',
-                'mediaId':
-                    '${item.modules.moduleDynamic!.major!.medialist!.id}',
-              },
-            );
-          } else if (url != null) {
-            handleWebview(url.http2https);
+        if (item.modules.moduleDynamic?.major?.medialist
+            case final medialist?) {
+          final String? url = medialist.jumpUrl;
+          if (url != null) {
+            if (url.contains('medialist/detail/ml')) {
+              Get.toNamed(
+                '/favDetail',
+                parameters: {
+                  'heroTag': '${medialist.cover}',
+                  'mediaId': '${medialist.id}',
+                },
+              );
+            } else {
+              handleWebview(url.http2https);
+            }
           }
         }
         break;
 
-      // case 'DYNAMIC_TYPE_COURSES_SEASON':
+      case 'DYNAMIC_TYPE_COURSES_SEASON':
+        PageUtils.viewPugv(
+          seasonId: item.modules.moduleDynamic!.major!.courses!.id,
+        );
+        break;
+
       // 纯文字动态查看
       // case 'DYNAMIC_TYPE_WORD':
       // # 装扮/剧集点评/普通分享
@@ -504,31 +551,30 @@ class PageUtils {
     }
   }
 
-  static void onHorizontalPreview(
-    GlobalKey<ScaffoldState> key,
-    transitionAnimationController,
-    ctr,
-    List<String> imgList,
-    index,
-    onClose,
+  static void onHorizontalPreviewState(
+    ScaffoldState state,
+    List<SourceModel> imgList,
+    int index,
   ) {
-    key.currentState?.showBottomSheet(
+    final animController = AnimationController(
+      vsync: state,
+      duration: Duration.zero,
+      reverseDuration: Duration.zero,
+    )..forward();
+    state.showBottomSheet(
+      constraints: const BoxConstraints(),
       (context) {
-        return FadeTransition(
-          opacity: Tween<double>(begin: 0, end: 1).animate(ctr),
-          child: InteractiveviewerGallery(
-            sources: imgList.map((url) => SourceModel(url: url)).toList(),
-            initIndex: index,
-            setStatusBar: false,
-            onClose: onClose,
-            quality: GlobalData().imgQuality,
-          ),
+        return InteractiveviewerGallery(
+          sources: imgList,
+          initIndex: index,
+          quality: GlobalData().imgQuality,
+          onClose: animController.dispose,
         );
       },
       enableDrag: false,
-      elevation: 0,
+      elevation: 0.0,
       backgroundColor: Colors.transparent,
-      transitionAnimationController: transitionAnimationController,
+      transitionAnimationController: animController,
       sheetAnimationStyle: const AnimationStyle(duration: Duration.zero),
     );
   }
@@ -537,7 +583,7 @@ class PageUtils {
     String url, {
     bool off = false,
   }) {
-    if (GStorage.openInBrowser) {
+    if (Pref.openInBrowser) {
       launchURL(url);
     } else {
       if (off) {
@@ -556,13 +602,13 @@ class PageUtils {
     }
   }
 
-  static Future<void> launchURL(String url) async {
+  static Future<void> launchURL(
+    String url, {
+    LaunchMode mode = LaunchMode.externalApplication,
+  }) async {
     try {
       final Uri uri = Uri.parse(url);
-      if (!await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      )) {
+      if (!await launchUrl(uri, mode: mode)) {
         SmartDialog.showToast('Could not launch $url');
       }
     } catch (e) {
@@ -576,7 +622,7 @@ class PageUtils {
     bool inApp = false,
     Map? parameters,
   }) async {
-    if (!inApp && GStorage.openInBrowser) {
+    if (!inApp && Pref.openInBrowser) {
       if (!await PiliScheme.routePushFromUrl(url, selfHandle: true)) {
         launchURL(url);
       }
@@ -598,7 +644,7 @@ class PageUtils {
   static void showVideoBottomSheet(
     BuildContext context, {
     required Widget child,
-    required Function isFullScreen,
+    required bool Function() isFullScreen,
     double? padding,
   }) {
     if (!context.mounted) {
@@ -608,34 +654,39 @@ class PageUtils {
       barrierLabel: '',
       barrierDismissible: true,
       pageBuilder: (buildContext, animation, secondaryAnimation) {
-        return MediaQuery.orientationOf(Get.context!) == Orientation.portrait
-            ? SafeArea(
-                child: Column(
-                  children: [
-                    const Spacer(flex: 3),
-                    Expanded(flex: 7, child: child),
-                    if (isFullScreen() && padding != null)
-                      SizedBox(height: padding),
-                  ],
-                ),
-              )
-            : SafeArea(
-                child: Row(
-                  children: [
-                    const Spacer(),
-                    Expanded(child: child),
-                  ],
-                ),
-              );
+        if (Get.context!.isPortrait) {
+          return SafeArea(
+            child: FractionallySizedBox(
+              heightFactor: 0.7,
+              widthFactor: 1.0,
+              alignment: Alignment.bottomCenter,
+              child: isFullScreen() && padding != null
+                  ? Padding(
+                      padding: EdgeInsets.only(bottom: padding),
+                      child: child,
+                    )
+                  : child,
+            ),
+          );
+        }
+        return SafeArea(
+          child: FractionallySizedBox(
+            widthFactor: 0.5,
+            heightFactor: 1.0,
+            alignment: Alignment.centerRight,
+            child: child,
+          ),
+        );
       },
       transitionDuration: const Duration(milliseconds: 350),
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        Offset begin =
-            MediaQuery.orientationOf(Get.context!) == Orientation.portrait
-                ? const Offset(0.0, 1.0)
-                : const Offset(1.0, 0.0);
-        var tween = Tween(begin: begin, end: Offset.zero)
-            .chain(CurveTween(curve: Curves.easeInOut));
+        Offset begin = Get.context!.isPortrait
+            ? const Offset(0.0, 1.0)
+            : const Offset(1.0, 0.0);
+        var tween = Tween(
+          begin: begin,
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(
           position: animation.drive(tween),
           child: child,
@@ -645,85 +696,161 @@ class PageUtils {
     );
   }
 
-  static void toVideoPage(
-    String page, {
-    dynamic arguments,
-    int? id,
-    bool preventDuplicates = true,
-    Map<String, String>? parameters,
+  static void toLiveRoom(
+    int? roomId, {
     bool off = false,
   }) {
+    if (roomId == null) {
+      return;
+    }
     if (off) {
-      Get.offNamed(
-        '/videoV?$page',
+      Get.offNamed('/liveRoom', arguments: roomId);
+    } else {
+      Get.toNamed('/liveRoom', arguments: roomId);
+    }
+  }
+
+  static Future<void>? toVideoPage({
+    VideoType videoType = VideoType.ugc,
+    int? aid,
+    String? bvid,
+    required int cid,
+    int? seasonId,
+    int? epId,
+    int? pgcType,
+    String? cover,
+    String? title,
+    int? progress,
+    Map? extraArguments,
+    bool off = false,
+  }) {
+    final arguments = {
+      'aid': aid ?? IdUtils.bv2av(bvid!),
+      'bvid': bvid ?? IdUtils.av2bv(aid!),
+      'cid': cid,
+      'seasonId': ?seasonId,
+      'epId': ?epId,
+      'pgcType': ?pgcType,
+      'cover': ?cover,
+      'title': ?title,
+      'progress': ?progress,
+      'videoType': videoType,
+      'heroTag': Utils.makeHeroTag(cid),
+      ...?extraArguments,
+    };
+    if (off) {
+      return Get.offNamed(
+        '/videoV',
         arguments: arguments,
-        id: id,
-        preventDuplicates: preventDuplicates,
-        parameters: parameters,
+        preventDuplicates: false,
       );
     } else {
-      Get.toNamed(
-        '/videoV?$page',
+      return Get.toNamed(
+        '/videoV',
         arguments: arguments,
-        id: id,
-        preventDuplicates: preventDuplicates,
-        parameters: parameters,
+        preventDuplicates: false,
       );
     }
   }
 
-  static bool viewPgcFromUri(String uri) {
-    String? id = RegExp(r'(ep|ss)\d+').firstMatch(uri)?.group(0);
-    if (id != null) {
-      bool isSeason = id.startsWith('ss');
-      id = id.substring(2);
-      viewPgc(
-        seasonId: isSeason ? id : null,
-        epId: isSeason ? null : id,
-      );
+  static final _pgcRegex = RegExp(r'(ep|ss)(\d+)');
+  static bool viewPgcFromUri(
+    String uri, {
+    bool isPgc = true,
+    String? progress,
+    int? aid,
+  }) {
+    RegExpMatch? match = _pgcRegex.firstMatch(uri);
+    if (match != null) {
+      bool isSeason = match.group(1) == 'ss';
+      String id = match.group(2)!;
+      if (isPgc) {
+        viewPgc(
+          seasonId: isSeason ? id : null,
+          epId: isSeason ? null : id,
+          progress: progress,
+        );
+      } else {
+        viewPugv(
+          seasonId: isSeason ? id : null,
+          epId: isSeason ? null : id,
+          aid: aid,
+        );
+      }
       return true;
     }
     return false;
   }
 
-  static Future<void> viewPgc(
-      {dynamic seasonId, dynamic epId, String? progress}) async {
+  static EpisodeItem findEpisode(
+    List<EpisodeItem> episodes, {
+    dynamic epId,
+    bool isPgc = true,
+  }) {
+    // epId episode -> progress episode -> first episode
+    EpisodeItem? episode;
+    if (epId != null) {
+      epId = epId.toString();
+      episode = episodes.firstWhereOrNull(
+        (item) => (isPgc ? item.epId : item.id).toString() == epId,
+      );
+    }
+    return episode ?? episodes.first;
+  }
+
+  static Future<void> viewPgc({
+    dynamic seasonId,
+    dynamic epId,
+    String? progress,
+  }) async {
     try {
       SmartDialog.showLoading(msg: '资源获取中');
       var result = await SearchHttp.pgcInfo(seasonId: seasonId, epId: epId);
       SmartDialog.dismiss();
-      if (result['status']) {
-        PgcInfoModel data = result['data'];
+      if (result.isSuccess) {
+        PgcInfoModel data = result.data;
+        final episodes = data.episodes;
+        final hasEpisode = episodes != null && episodes.isNotEmpty;
 
-        // epId episode -> progress episode -> first episode
         EpisodeItem? episode;
 
+        void viewSection(EpisodeItem episode) {
+          toVideoPage(
+            videoType: VideoType.ugc,
+            bvid: episode.bvid!,
+            cid: episode.cid!,
+            seasonId: data.seasonId,
+            epId: episode.epId,
+            cover: episode.cover,
+            progress: progress == null ? null : int.tryParse(progress),
+            extraArguments: {
+              'pgcApi': true,
+              'pgcItem': data,
+            },
+          );
+        }
+
         if (epId != null) {
-          if (data.episodes?.isNotEmpty == true) {
-            episode = data.episodes!.firstWhereOrNull(
-              (item) {
-                return item.epId.toString() == epId.toString();
-              },
+          epId = epId.toString();
+          if (hasEpisode) {
+            episode = episodes.firstWhereOrNull(
+              (item) => item.epId.toString() == epId,
             );
           }
-          if (episode == null && data.section?.isNotEmpty == true) {
-            for (Section item in data.section!) {
-              if (item.episodes?.isNotEmpty == true) {
-                for (EpisodeItem item in item.episodes!) {
-                  if (item.epId.toString() == epId.toString()) {
-                    // view as normal video
-                    toVideoPage(
-                      'bvid=${item.bvid}&cid=${item.cid}&seasonId=${data.seasonId}&epId=${item.epId}',
-                      arguments: {
-                        'pgcApi': true,
-                        'pic': item.cover,
-                        'heroTag': Utils.makeHeroTag(item.cid),
-                        'videoType': SearchType.video,
-                        if (progress != null) 'progress': int.tryParse(progress)
-                      },
-                      preventDuplicates: false,
-                    );
-                    return;
+
+          // find section
+          if (episode == null) {
+            final sections = data.section;
+            if (sections != null && sections.isNotEmpty) {
+              for (var section in sections) {
+                final episodes = section.episodes;
+                if (episodes != null && episodes.isNotEmpty) {
+                  for (var episode in episodes) {
+                    if (episode.epId.toString() == epId) {
+                      // view as ugc
+                      viewSection(episode);
+                      return;
+                    }
                   }
                 }
               }
@@ -731,35 +858,86 @@ class PageUtils {
           }
         }
 
-        if (data.episodes.isNullOrEmpty) {
-          SmartDialog.showToast('资源加载失败');
+        if (hasEpisode) {
+          episode ??= findEpisode(
+            episodes,
+            epId: data.userStatus?.progress?.lastEpId,
+          );
+          toVideoPage(
+            videoType: VideoType.pgc,
+            bvid: episode.bvid!,
+            cid: episode.cid!,
+            seasonId: data.seasonId,
+            epId: episode.epId,
+            pgcType: data.type,
+            cover: episode.cover,
+            progress: progress == null ? null : int.tryParse(progress),
+            extraArguments: {
+              'pgcItem': data,
+            },
+          );
           return;
+        } else {
+          episode ??= data.section?.firstOrNull?.episodes?.firstOrNull;
+          if (episode != null) {
+            viewSection(episode);
+            return;
+          }
         }
 
-        episode ??= data.userStatus?.progress?.lastEpId != null
-            ? data.episodes!.firstWhereOrNull(
-                  (item) => item.epId == data.userStatus?.progress?.lastEpId,
-                ) ??
-                data.episodes!.first
-            : data.episodes!.first;
-        toVideoPage(
-          'bvid=${episode.bvid}&cid=${episode.cid}&seasonId=${data.seasonId}&epId=${episode.epId}&type=${data.type}',
-          arguments: {
-            'pic': episode.cover,
-            'heroTag': Utils.makeHeroTag(episode.cid),
-            'videoType': SearchType.media_bangumi,
-            'pgcItem': data,
-            if (progress != null) 'progress': int.tryParse(progress)
-          },
-          preventDuplicates: false,
-        );
+        SmartDialog.showToast('资源加载失败');
       } else {
-        SmartDialog.showToast(result['msg']);
+        result.toast();
       }
     } catch (e) {
       SmartDialog.dismiss();
       SmartDialog.showToast('$e');
       if (kDebugMode) debugPrint('$e');
+    }
+  }
+
+  static Future<void> viewPugv({
+    dynamic seasonId,
+    dynamic epId,
+    int? aid,
+  }) async {
+    try {
+      SmartDialog.showLoading(msg: '资源获取中');
+      var res = await SearchHttp.pugvInfo(seasonId: seasonId, epId: epId);
+      SmartDialog.dismiss();
+      if (res.isSuccess) {
+        PgcInfoModel data = res.data;
+        final episodes = data.episodes;
+        if (episodes != null && episodes.isNotEmpty) {
+          EpisodeItem? episode;
+          if (aid != null) {
+            episode = episodes.firstWhereOrNull((e) => e.aid == aid);
+          }
+          episode ??= findEpisode(
+            episodes,
+            epId: epId ?? data.userStatus?.progress?.lastEpId,
+            isPgc: false,
+          );
+          toVideoPage(
+            videoType: VideoType.pugv,
+            aid: episode.aid!,
+            cid: episode.cid!,
+            seasonId: data.seasonId,
+            epId: episode.id,
+            cover: episode.cover,
+            extraArguments: {
+              'pgcItem': data,
+            },
+          );
+        } else {
+          SmartDialog.showToast('资源加载失败');
+        }
+      } else {
+        res.toast();
+      }
+    } catch (e) {
+      SmartDialog.dismiss();
+      SmartDialog.showToast(e.toString());
     }
   }
 

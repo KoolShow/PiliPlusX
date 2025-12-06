@@ -21,7 +21,7 @@ class FavArticleItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Material(
-      color: Colors.transparent,
+      type: MaterialType.transparency,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -39,21 +39,23 @@ class FavArticleItem extends StatelessWidget {
                 vertical: 5,
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (item.cover != null) ...[
                     AspectRatio(
                       aspectRatio: StyleString.aspectRatio,
                       child: LayoutBuilder(
-                        builder: (BuildContext context,
-                            BoxConstraints boxConstraints) {
-                          return NetworkImgLayer(
-                            src: item.cover!.url,
-                            width: boxConstraints.maxWidth,
-                            height: boxConstraints.maxHeight,
-                          );
-                        },
+                        builder:
+                            (
+                              BuildContext context,
+                              BoxConstraints boxConstraints,
+                            ) {
+                              return NetworkImgLayer(
+                                src: item.cover!.url,
+                                width: boxConstraints.maxWidth,
+                                height: boxConstraints.maxHeight,
+                              );
+                            },
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -115,11 +117,9 @@ class FavArticleItem extends StatelessWidget {
             bottom: -6,
             child: iconButton(
               iconSize: 18,
-              context: context,
               onPressed: onDelete,
-              icon: Icons.clear,
+              icon: const Icon(Icons.clear),
               iconColor: theme.colorScheme.outline,
-              bgColor: Colors.transparent,
             ),
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models_new/space/space_archive/item.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -20,7 +21,7 @@ class VideoCardVMemberHome extends StatelessWidget {
     required this.videoItem,
   });
 
-  Future<void> onPushDetail(String heroTag) async {
+  Future<void> onPushDetail() async {
     String? goto = videoItem.goto;
     switch (goto) {
       case 'bangumi':
@@ -45,11 +46,10 @@ class VideoCardVMemberHome extends StatelessWidget {
         int? cid = videoItem.cid ?? await SearchHttp.ab2c(aid: aid, bvid: bvid);
         if (cid != null) {
           PageUtils.toVideoPage(
-            'bvid=$bvid&cid=$cid',
-            arguments: {
-              'pic': videoItem.cover,
-              'heroTag': heroTag,
-            },
+            bvid: bvid,
+            cid: cid,
+            cover: videoItem.cover,
+            title: videoItem.title,
           );
         }
         break;
@@ -63,17 +63,18 @@ class VideoCardVMemberHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void onLongPress() => imageSaveDialog(
+      title: videoItem.title,
+      cover: videoItem.cover,
+      aid: videoItem.param,
+      bvid: videoItem.bvid,
+    );
     return Card(
       clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: () => onPushDetail(Utils.makeHeroTag(videoItem.bvid)),
-        onLongPress: () => imageSaveDialog(
-          title: videoItem.title,
-          cover: videoItem.cover,
-          aid: videoItem.param,
-          bvid: videoItem.bvid,
-        ),
+        onTap: onPushDetail,
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -90,6 +91,7 @@ class VideoCardVMemberHome extends StatelessWidget {
                         src: videoItem.cover,
                         width: maxWidth,
                         height: maxHeight,
+                        radius: 0,
                       ),
                       if (videoItem.duration > 0)
                         PBadge(
@@ -97,14 +99,39 @@ class VideoCardVMemberHome extends StatelessWidget {
                           right: 7,
                           size: PBadgeSize.small,
                           type: PBadgeType.gray,
-                          text: Utils.timeFormat(videoItem.duration),
+                          text: DurationUtils.formatDuration(
+                            videoItem.duration,
+                          ),
+                        ),
+                      if (videoItem.badges?.isNotEmpty == true)
+                        PBadge(
+                          text: videoItem.badges!
+                              .map((e) => e.text ?? '')
+                              .join('|'),
+                          top: 6,
+                          right: 6,
+                          type: videoItem.badges!.first.text == '充电专属'
+                              ? PBadgeType.error
+                              : PBadgeType.primary,
                         )
+                      else if (videoItem.isCooperation == true)
+                        const PBadge(
+                          text: '合作',
+                          top: 6,
+                          right: 6,
+                        )
+                      else if (videoItem.isSteins == true)
+                        const PBadge(
+                          text: '互动',
+                          top: 6,
+                          right: 6,
+                        ),
                     ],
                   );
                 },
               ),
             ),
-            content(context)
+            content(context),
           ],
         ),
       ),

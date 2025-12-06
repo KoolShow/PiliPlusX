@@ -2,7 +2,10 @@
 
 import 'dart:convert';
 
-class IdUtils {
+import 'package:PiliPlus/utils/utils.dart';
+import 'package:uuid/v4.dart';
+
+abstract class IdUtils {
   static const XOR_CODE = 23442827791579;
   static const MASK_CODE = 2251799813685247;
   static const MAX_AID = 1 << 51;
@@ -12,8 +15,14 @@ class IdUtils {
       'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
   static final invData = {for (var (i, c) in data.codeUnits.indexed) c: i};
 
-  static final bvRegex = RegExp(r'bv(1[0-9A-Za-z]{9})', caseSensitive: false);
+  static final bvRegex = RegExp(r'bv1[0-9a-zA-Z]{9}', caseSensitive: false);
+  static final bvRegexExact = RegExp(
+    r'^bv1[0-9a-zA-Z]{9}$',
+    caseSensitive: false,
+  );
   static final avRegex = RegExp(r'av(\d+)', caseSensitive: false);
+  static final avRegexExact = RegExp(r'^av(\d+)$', caseSensitive: false);
+  static final digitOnlyRegExp = RegExp(r'^\d+$');
 
   static void swap<T>(List<T> list, int idx1, int idx2) {
     final idx1Value = list[idx1];
@@ -45,40 +54,68 @@ class IdUtils {
     swap(bvidArr, 4, 7);
 
     bvidArr.removeRange(0, 3);
-    int tmp = bvidArr.fold(0, (pre, char) => pre * BASE + invData[char]!);
-    return ((tmp & MASK_CODE) ^ XOR_CODE).toInt();
+    final tmp = bvidArr.fold(0, (pre, char) => pre * BASE + invData[char]!);
+    return (tmp & MASK_CODE) ^ XOR_CODE;
   }
 
   // 匹配
-  static Map<String, dynamic> matchAvorBv({String? input}) {
-    final Map<String, dynamic> result = {};
+  static AvBvRes matchAvorBv({String? input}) {
     if (input == null || input.isEmpty) {
-      return result;
+      return const (av: null, bv: null);
     }
-    String? bvid = bvRegex.firstMatch(input)?.group(1);
+    String? bvid = bvRegex.firstMatch(input)?.group(0);
 
     late String? aid = avRegex.firstMatch(input)?.group(1);
 
     if (bvid != null) {
-      result['BV'] = 'BV$bvid';
+      return (av: null, bv: bvid);
     } else if (aid != null) {
-      result['AV'] = int.parse(aid);
+      return (av: int.parse(aid), bv: null);
     }
-    return result;
+    return const (av: null, bv: null);
   }
 
-  // eid生成
-  static String? genAuroraEid(int uid) {
-    if (uid == 0) {
-      return null;
-    }
-    String uidString = uid.toString();
-    List<int> resultBytes = List.generate(
-      uidString.length,
-      (i) => uidString.codeUnitAt(i) ^ "ad1va46a7lza".codeUnitAt(i % 12),
-    );
-    String auroraEid = base64Url.encode(resultBytes);
-    auroraEid = auroraEid.replaceAll(RegExp(r'=*$', multiLine: true), '');
-    return auroraEid;
+  static String genBuvid3() {
+    return '${const UuidV4().generate().toUpperCase()}${Utils.random.nextInt(100000).toString().padLeft(5, "0")}infoc';
   }
+
+  static String genAuroraEid(int uid) {
+    if (uid == 0) {
+      return '';
+    }
+
+    var midByte = utf8.encode(uid.toString());
+
+    const key = 'ad1va46a7lza';
+    for (int i = 0; i < midByte.length; i++) {
+      midByte[i] ^= key.codeUnitAt(i % key.length);
+    }
+
+    String base64Encoded = base64.encode(midByte).replaceAll('=', '');
+
+    return base64Encoded;
+  }
+
+  static String genTraceId() {
+    String randomId = Utils.generateRandomString(32);
+
+    StringBuffer randomTraceId = StringBuffer(randomId.substring(0, 24));
+
+    int ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    for (int i = 2; i >= 0; i--) {
+      ts >>= 8;
+      randomTraceId.write((ts & 0xFF).toRadixString(16).padLeft(2, '0'));
+    }
+
+    randomTraceId.write(randomId.substring(30, 32));
+
+    return '${randomTraceId.toString()}:${randomTraceId.toString().substring(16, 32)}:0:0';
+  }
+}
+
+typedef AvBvRes = ({int? av, String? bv});
+
+extension AvBvExt on AvBvRes {
+  bool get isNotEmpty => this != const (av: null, bv: null);
 }

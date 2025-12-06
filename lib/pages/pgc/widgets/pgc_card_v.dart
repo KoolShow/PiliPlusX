@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -18,55 +19,55 @@ class PgcCardV extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String heroTag = Utils.makeHeroTag(item.mediaId);
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Card(
-      clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: StyleString.mdRadius),
       child: InkWell(
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-        ),
+        borderRadius: StyleString.mdRadius,
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         onTap: () => PageUtils.viewPgc(seasonId: item.seasonId),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
               aspectRatio: 0.75,
-              child: LayoutBuilder(builder: (context, boxConstraints) {
-                final double maxWidth = boxConstraints.maxWidth;
-                final double maxHeight = boxConstraints.maxHeight;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Hero(
-                      tag: heroTag,
-                      child: NetworkImgLayer(
+              child: LayoutBuilder(
+                builder: (context, boxConstraints) {
+                  final double maxWidth = boxConstraints.maxWidth;
+                  final double maxHeight = boxConstraints.maxHeight;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NetworkImgLayer(
                         src: item.cover,
                         width: maxWidth,
                         height: maxHeight,
                       ),
-                    ),
-                    PBadge(
-                      text: item.badge,
-                      top: 6,
-                      right: 6,
-                      bottom: null,
-                      left: null,
-                    ),
-                    if (item.isFinish == 0 &&
-                        item.renewalTime?.isNotEmpty == true)
                       PBadge(
-                        text: item.renewalTime,
-                        bottom: 6,
-                        left: 6,
-                        type: PBadgeType.gray,
-                      )
-                  ],
-                );
-              }),
+                        text: item.badge,
+                        top: 6,
+                        right: 6,
+                        bottom: null,
+                        left: null,
+                      ),
+                      if (item.isFinish == 0 &&
+                          item.renewalTime?.isNotEmpty == true)
+                        PBadge(
+                          text: item.renewalTime,
+                          bottom: 6,
+                          left: 6,
+                          type: PBadgeType.gray,
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
-            content(context)
+            content(context),
           ],
         ),
       ),
@@ -98,6 +99,12 @@ class PgcCardV extends StatelessWidget {
             if (item.progress != null)
               Text(
                 item.progress!,
+                maxLines: 1,
+                style: style,
+              )
+            else if (item.newEp?.indexShow != null)
+              Text(
+                item.newEp!.indexShow!,
                 maxLines: 1,
                 style: style,
               ),

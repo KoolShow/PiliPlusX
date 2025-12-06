@@ -1,9 +1,11 @@
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_index_result/list.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 
 // 视频卡片 - 垂直布局
@@ -17,58 +19,62 @@ class PgcCardVPgcIndex extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Card(
-      clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: StyleString.mdRadius),
       child: InkWell(
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-        ),
+        borderRadius: StyleString.mdRadius,
         onTap: () => PageUtils.viewPgc(seasonId: item.seasonId),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
               aspectRatio: 0.75,
-              child: LayoutBuilder(builder: (context, boxConstraints) {
-                final double maxWidth = boxConstraints.maxWidth;
-                final double maxHeight = boxConstraints.maxHeight;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    NetworkImgLayer(
-                      src: item.cover,
-                      width: maxWidth,
-                      height: maxHeight,
-                    ),
-                    PBadge(
-                      text: item.badge,
-                      top: 6,
-                      right: 6,
-                      bottom: null,
-                      left: null,
-                    ),
-                    PBadge(
-                      text: item.order,
-                      top: null,
-                      right: null,
-                      bottom: 6,
-                      left: 6,
-                      type: PBadgeType.gray,
-                    ),
-                  ],
-                );
-              }),
+              child: LayoutBuilder(
+                builder: (context, boxConstraints) {
+                  final double maxWidth = boxConstraints.maxWidth;
+                  final double maxHeight = boxConstraints.maxHeight;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NetworkImgLayer(
+                        src: item.cover,
+                        width: maxWidth,
+                        height: maxHeight,
+                      ),
+                      PBadge(
+                        text: item.badge,
+                        top: 6,
+                        right: 6,
+                        bottom: null,
+                        left: null,
+                      ),
+                      PBadge(
+                        text: item.order,
+                        top: null,
+                        right: null,
+                        bottom: 6,
+                        left: 6,
+                        type: PBadgeType.gray,
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-            conetent(context)
+            content(context),
           ],
         ),
       ),
     );
   }
 
-  Widget conetent(BuildContext context) {
+  Widget content(BuildContext context) {
     final theme = Theme.of(context);
     return Expanded(
       child: Padding(

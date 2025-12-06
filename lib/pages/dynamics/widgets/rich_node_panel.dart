@@ -1,12 +1,16 @@
-import 'package:PiliPlus/common/widgets/image/image_view.dart';
+import 'dart:io' show Platform;
+
+import 'package:PiliPlus/common/widgets/image/custom_grid_view.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/search.dart';
+import 'package:PiliPlus/models/common/image_preview_type.dart'
+    show SourceModel;
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/vote.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -15,30 +19,32 @@ import 'package:get/get.dart';
 
 // 富文本
 TextSpan? richNode(
-  ThemeData theme,
-  DynamicItemModel item,
-  BuildContext context,
-) {
+  BuildContext context, {
+  required ThemeData theme,
+  required DynamicItemModel item,
+  required double maxWidth,
+}) {
   try {
     late final style = TextStyle(color: theme.colorScheme.primary);
     List<InlineSpan> spanChildren = [];
 
+    final moduleDynamic = item.modules.moduleDynamic;
     List<RichTextNodeItem>? richTextNodes;
-    if (item.modules.moduleDynamic?.desc != null) {
-      richTextNodes = item.modules.moduleDynamic!.desc!.richTextNodes;
-    } else if (item.modules.moduleDynamic?.major != null) {
+    if (moduleDynamic?.desc case final desc?) {
+      richTextNodes = desc.richTextNodes;
+    } else if (moduleDynamic?.major?.opus case final opus?) {
       // 动态页面 richTextNodes 层级可能与主页动态层级不同
-      richTextNodes =
-          item.modules.moduleDynamic!.major!.opus?.summary?.richTextNodes;
-      if (item.modules.moduleDynamic?.major?.opus?.title != null) {
+      richTextNodes = opus.summary?.richTextNodes;
+      if (opus.title case final title?) {
         spanChildren.add(
           TextSpan(
-            text: '${item.modules.moduleDynamic!.major!.opus!.title!}\n',
+            text: '$title\n',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         );
       }
     }
+
     if (richTextNodes == null || richTextNodes.isEmpty) {
       return null;
     } else {
@@ -71,12 +77,14 @@ TextSpan? richNode(
                 style: style,
                 recognizer: TapGestureRecognizer()
                   ..onTap = () => Get.toNamed(
-                        '/searchResult',
-                        parameters: {
-                          'keyword':
-                              i.origText!.substring(1, i.origText!.length - 1),
-                        },
+                    '/searchResult',
+                    parameters: {
+                      'keyword': i.origText!.substring(
+                        1,
+                        i.origText!.length - 1,
                       ),
+                    },
+                  ),
               ),
             );
             break;
@@ -100,8 +108,8 @@ TextSpan? richNode(
                   recognizer: i.origText == null
                       ? null
                       : (TapGestureRecognizer()
-                        ..onTap =
-                            () => PiliScheme.routePushFromUrl(i.origText!)),
+                          ..onTap = () =>
+                              PiliScheme.routePushFromUrl(i.origText!)),
                 ),
               );
             break;
@@ -125,8 +133,9 @@ TextSpan? richNode(
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
                       final dynIdStr = item.basic?.commentIdStr;
-                      final dynId =
-                          dynIdStr != null ? int.tryParse(dynIdStr) : null;
+                      final dynId = dynIdStr != null
+                          ? int.tryParse(dynIdStr)
+                          : null;
                       showVoteDialog(context, int.parse(i.rid!), dynId);
                     },
                 ),
@@ -165,12 +174,12 @@ TextSpan? richNode(
                   style: style,
                   recognizer: TapGestureRecognizer()
                     ..onTap = () => Get.toNamed(
-                          '/webview',
-                          parameters: {
-                            'url':
-                                'https://www.bilibili.com/h5/lottery/result?business_id=${item.idStr}'
-                          },
-                        ),
+                      '/webview',
+                      parameters: {
+                        'url':
+                            'https://www.bilibili.com/h5/lottery/result?business_id=${item.idStr}',
+                      },
+                    ),
                 ),
               );
             break;
@@ -194,8 +203,8 @@ TextSpan? richNode(
                   recognizer: i.jumpUrl == null
                       ? null
                       : (TapGestureRecognizer()
-                        ..onTap =
-                            () => PiliScheme.routePushFromUrl(i.jumpUrl!)),
+                          ..onTap = () =>
+                              PiliScheme.routePushFromUrl(i.jumpUrl!)),
                 ),
               );
             break;
@@ -222,10 +231,8 @@ TextSpan? richNode(
                         int? cid = await SearchHttp.ab2c(bvid: i.rid);
                         if (cid != null) {
                           PageUtils.toVideoPage(
-                            'bvid=${i.rid}&cid=$cid',
-                            arguments: {
-                              'heroTag': Utils.makeHeroTag(i.rid),
-                            },
+                            bvid: i.rid,
+                            cid: cid,
                           );
                         }
                       } catch (err) {
@@ -235,31 +242,106 @@ TextSpan? richNode(
                 ),
               );
             break;
-          case 'RICH_TEXT_NODE_TYPE_VIEW_PICTURE'
-              when (i.pics?.isNotEmpty == true):
+          case 'RICH_TEXT_NODE_TYPE_VIEW_PICTURE':
+            if (i.pics?.isNotEmpty == true) {
+              spanChildren
+                ..add(const TextSpan(text: '\n'))
+                ..add(
+                  WidgetSpan(
+                    child: CustomGridView(
+                      maxWidth: maxWidth,
+                      picArr: i.pics!
+                          .map(
+                            (item) => ImageModel(
+                              url: item.src ?? '',
+                              width: item.width,
+                              height: item.height,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                );
+            } else {
+              spanChildren.add(
+                TextSpan(
+                  text: i.text,
+                  style: style,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () {
+                      void onView(List<OpusPicModel> list) {
+                        PageUtils.imageView(
+                          imgList: list
+                              .map((e) => SourceModel(url: e.src!))
+                              .toList(),
+                        );
+                      }
+
+                      if (i.pics?.isNotEmpty == true) {
+                        onView(i.pics!);
+                        return;
+                      }
+                      if (i.dynPic?.isNotEmpty == true) {
+                        onView(i.dynPic!);
+                        return;
+                      }
+
+                      DynamicsHttp.dynPic(i.rid).then((res) {
+                        if (res.isSuccess) {
+                          var list = res.data;
+                          if (Platform.isAndroid) {
+                            i.pics = list;
+                          } else {
+                            i.dynPic = list;
+                          }
+                          if (list != null && list.isNotEmpty) {
+                            onView(list);
+                          }
+                        } else {
+                          res.toast();
+                        }
+                      });
+                    },
+                ),
+              );
+            }
+            break;
+          case 'RICH_TEXT_NODE_TYPE_OGV_SEASON':
             spanChildren
-              ..add(const TextSpan(text: '\n'))
               ..add(
                 WidgetSpan(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return imageView(
-                        constraints.maxWidth,
-                        i.pics!
-                            .map((item) => ImageModel(
-                                  url: item.src ?? '',
-                                  width: item.width,
-                                  height: item.height,
-                                ))
-                            .toList(),
-                      );
-                    },
+                  alignment: PlaceholderAlignment.middle,
+                  child: Icon(
+                    Icons.play_circle_outline_outlined,
+                    size: 16,
+                    color: theme.colorScheme.primary,
                   ),
+                ),
+              )
+              ..add(
+                TextSpan(
+                  text: i.text,
+                  style: style,
+                  recognizer: i.jumpUrl == null
+                      ? null
+                      : (TapGestureRecognizer()
+                          ..onTap = () =>
+                              PiliScheme.routePushFromUrl(i.jumpUrl!)),
                 ),
               );
             break;
           default:
-            spanChildren.add(TextSpan(text: i.text, style: style));
+            spanChildren.add(
+              TextSpan(
+                text: i.text,
+                style: style,
+                recognizer: i.jumpUrl == null
+                    ? null
+                    : (TapGestureRecognizer()
+                        ..onTap = () =>
+                            PiliScheme.routePushFromUrl(i.jumpUrl!)),
+              ),
+            );
             break;
         }
       }

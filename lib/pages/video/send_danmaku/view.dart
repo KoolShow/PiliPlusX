@@ -1,26 +1,29 @@
 import 'dart:async';
 
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/danmaku.dart';
+import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/main.dart';
 import 'package:PiliPlus/models/common/publish_panel_type.dart';
-import 'package:PiliPlus/models/user/info.dart';
-import 'package:PiliPlus/pages/common/common_publish_page.dart';
+import 'package:PiliPlus/pages/common/publish/common_text_pub_page.dart';
+import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/pages/setting/slide_color_picker.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
-class SendDanmakuPanel extends CommonPublishPage {
+class SendDanmakuPanel extends CommonTextPubPage {
   // video
   final dynamic cid;
   final dynamic bvid;
   final dynamic progress;
 
-  final ValueChanged<DanmakuContentItem> callback;
+  final ValueChanged<DanmakuContentItem<DanmakuExtra>> callback;
   final bool darkVideoPage;
 
   // config
@@ -44,7 +47,7 @@ class SendDanmakuPanel extends CommonPublishPage {
   State<SendDanmakuPanel> createState() => _SendDanmakuPanelState();
 }
 
-class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
+class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
   late final RxInt _mode;
   late final RxInt _fontsize;
   late final Rx<Color> _color;
@@ -72,91 +75,65 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
     _mode = (widget.dmConfig?.mode ?? 1).obs;
     _fontsize = (widget.dmConfig?.fontsize ?? 25).obs;
     _color = (widget.dmConfig?.color ?? Colors.white).obs;
-    UserInfoData? userInfo = GStorage.userInfo.get('userInfoCache');
-    if (userInfo?.vipStatus == 1) {
+    if (Pref.userInfoCache?.vipStatus == 1) {
       _colorList.add(Colors.transparent);
     }
   }
 
   @override
   void dispose() {
-    widget.onSaveDmConfig?.call(
-        (mode: _mode.value, fontsize: _fontsize.value, color: _color.value));
+    widget.onSaveDmConfig?.call((
+      mode: _mode.value,
+      fontsize: _fontsize.value,
+      color: _color.value,
+    ));
     super.dispose();
   }
 
-  Expanded get _buildColorPanel => Expanded(
-        child: Obx(
-          () => LayoutBuilder(
-            key: ValueKey(_color.value),
-            builder: (context, constraints) {
-              final int crossAxisCount = (constraints.maxWidth / 40).toInt();
-              final bool isCustomColor = !_colorList.contains(_color.value);
-              final int length =
-                  _colorList.length + (isCustomColor ? 1 : 0) + 1;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.zero,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 4,
-                  mainAxisSpacing: 4,
+  Widget get _buildColorPanel => Expanded(
+    child: Obx(
+      () {
+        final bool isCustomColor = !_colorList.contains(_color.value);
+        final int length = _colorList.length + (isCustomColor ? 1 : 0) + 1;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 42,
+            crossAxisSpacing: 4,
+            mainAxisSpacing: 4,
+          ),
+          itemCount: length,
+          itemBuilder: (context, index) {
+            if (index == length - 1) {
+              return GestureDetector(
+                onTap: _showColorPicker,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: themeData.colorScheme.secondaryContainer,
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(8),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  margin: const EdgeInsets.all(2),
+                  child: Icon(
+                    size: 22,
+                    Icons.edit,
+                    color: themeData.colorScheme.onSecondaryContainer,
+                  ),
                 ),
-                itemCount: length,
-                itemBuilder: (context, index) {
-                  if (index == length - 1) {
-                    return GestureDetector(
-                      onTap: _showColorPicker,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: themeData.colorScheme.secondaryContainer,
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(8)),
-                        ),
-                        alignment: Alignment.center,
-                        margin: const EdgeInsets.all(2),
-                        child: Icon(
-                          size: 22,
-                          Icons.edit,
-                          color: themeData.colorScheme.onSecondaryContainer,
-                        ),
-                      ),
-                    );
-                  } else if (index == length - 2 && isCustomColor) {
-                    return _buildColorItem(_color.value);
-                  }
-                  return _buildColorItem(_colorList[index]);
-                },
               );
-            },
-          ),
-        ),
-      );
-
-  Widget get child => SafeArea(
-        bottom: false,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 450),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-              color: themeData.colorScheme.surface,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildInputView(),
-                buildPanelContainer(Colors.transparent),
-              ],
-            ),
-          ),
-        ),
-      );
+            } else if (index == length - 2 && isCustomColor) {
+              return _buildColorItem(_color.value);
+            }
+            return _buildColorItem(_colorList[index]);
+          },
+        );
+      },
+    ),
+  );
 
   @override
   void didChangeDependencies() {
@@ -170,59 +147,96 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
 
   @override
   Widget build(BuildContext context) {
+    Widget child = ViewSafeArea(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 450),
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            color: themeData.colorScheme.surface,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildInputView(),
+              buildPanelContainer(themeData, Colors.transparent),
+            ],
+          ),
+        ),
+      ),
+    );
     return widget.darkVideoPage ? Theme(data: themeData, child: child) : child;
   }
 
   @override
   Widget? get customPanel => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: themeData.colorScheme.outline.withValues(alpha: 0.1),
-            ),
-          ),
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      border: Border(
+        top: BorderSide(
+          color: themeData.colorScheme.outline.withValues(alpha: 0.1),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    ),
+    child: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          Row(
             children: [
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('弹幕字号', style: TextStyle(fontSize: 15)),
-                  const SizedBox(width: 16),
-                  _buildFontSizeItem(18, '小'),
-                  const SizedBox(width: 5),
-                  _buildFontSizeItem(25, '标准'),
-                ],
+              Text(
+                '弹幕字号',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: themeData.colorScheme.onSurface,
+                ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('弹幕样式', style: TextStyle(fontSize: 15)),
-                  const SizedBox(width: 16),
-                  _buildPositionItem(1, '滚动'),
-                  const SizedBox(width: 5),
-                  _buildPositionItem(5, '顶部'),
-                  const SizedBox(width: 5),
-                  _buildPositionItem(4, '底部'),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('弹幕颜色', style: TextStyle(fontSize: 15)),
-                  const SizedBox(width: 16),
-                  _buildColorPanel,
-                ],
-              ),
-              SizedBox(height: 12 + MediaQuery.paddingOf(context).bottom),
+              const SizedBox(width: 16),
+              _buildFontSizeItem(18, '小'),
+              const SizedBox(width: 5),
+              _buildFontSizeItem(25, '标准'),
             ],
           ),
-        ),
-      );
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                '弹幕样式',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: themeData.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 16),
+              _buildPositionItem(1, '滚动'),
+              const SizedBox(width: 5),
+              _buildPositionItem(5, '顶部'),
+              const SizedBox(width: 5),
+              _buildPositionItem(4, '底部'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '弹幕颜色',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: themeData.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 16),
+              _buildColorPanel,
+            ],
+          ),
+          SizedBox(height: 12 + MediaQuery.viewPaddingOf(context).bottom),
+        ],
+      ),
+    ),
+  );
 
   Widget _buildColorItem(Color color) {
     return GestureDetector(
@@ -336,21 +350,22 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
       child: Row(
         children: [
           Obx(
-            () => iconButton(
-              context: context,
-              tooltip: '弹幕样式',
-              onPressed: () {
-                updatePanelType(panelType.value == PanelType.keyboard
-                    ? PanelType.emoji
-                    : PanelType.keyboard);
-              },
-              bgColor: Colors.transparent,
-              iconSize: 24,
-              icon: Icons.text_format,
-              iconColor: panelType.value == PanelType.emoji
-                  ? themeData.colorScheme.primary
-                  : themeData.colorScheme.onSurfaceVariant,
-            ),
+            () {
+              final isEmoji = panelType.value == PanelType.emoji;
+              return iconButton(
+                tooltip: '弹幕样式',
+                onPressed: () {
+                  updatePanelType(
+                    isEmoji ? PanelType.keyboard : PanelType.emoji,
+                  );
+                },
+                iconSize: 24,
+                icon: const Icon(Icons.text_format),
+                iconColor: isEmoji
+                    ? themeData.colorScheme.primary
+                    : themeData.colorScheme.onSurfaceVariant,
+              );
+            },
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -370,15 +385,7 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
                     inputFormatters: [
                       LengthLimitingTextInputFormatter(100),
                     ],
-                    onChanged: (value) {
-                      bool isEmpty = value.trim().isEmpty;
-                      if (!isEmpty && !enablePublish.value) {
-                        enablePublish.value = true;
-                      } else if (isEmpty && enablePublish.value) {
-                        enablePublish.value = false;
-                      }
-                      widget.onSave?.call(value);
-                    },
+                    onChanged: onChanged,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (value) {
                       if (value.trim().isNotEmpty) {
@@ -403,47 +410,42 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
           Obx(
             () => enablePublish.value
                 ? iconButton(
-                    context: context,
-                    bgColor: Colors.transparent,
                     iconSize: 22,
                     iconColor: themeData.colorScheme.onSurfaceVariant,
                     onPressed: () {
                       editController.clear();
                       enablePublish.value = false;
                     },
-                    icon: Icons.clear,
+                    icon: const Icon(Icons.clear),
                   )
                 : const SizedBox.shrink(),
           ),
           const SizedBox(width: 12),
           Obx(
             () => iconButton(
-              context: context,
               tooltip: '发送',
-              bgColor: Colors.transparent,
               iconSize: 22,
               iconColor: enablePublish.value
                   ? themeData.colorScheme.primary
                   : themeData.colorScheme.outline,
               onPressed: enablePublish.value ? onPublish : null,
-              icon: Icons.send,
+              icon: const Icon(Icons.send),
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
-  void _showColorPicker() {
+  Future<void> _showColorPicker() async {
     controller.keepChatPanel();
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
         title: const Text('Color Picker'),
         content: SlideColorPicker(
-          showResetBtn: false,
           color: _color.value,
           callback: (Color? color) {
             if (color != null) {
@@ -453,11 +455,11 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
         ),
       ),
     );
+    controller.restoreChatPanel();
   }
 
   @override
-  Future<void> onCustomPublish(
-      {required String message, List? pictures}) async {
+  Future<void> onCustomPublish({List? pictures}) async {
     SmartDialog.showLoading(msg: '发送中...');
     bool isColorful = _color.value == Colors.transparent;
     final res = await DanmakuHttp.shootDanmaku(
@@ -467,13 +469,21 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
       msg: editController.text,
       mode: _mode.value,
       fontsize: _fontsize.value,
-      color: isColorful ? null : _color.value.value & 0xFFFFFF,
+      color: isColorful ? null : _color.value.toARGB32() & 0xFFFFFF,
       colorful: isColorful,
     );
     SmartDialog.dismiss();
-    if (res['status']) {
+    if (res case Success(:final response)) {
+      hasPub = true;
       Get.back();
       SmartDialog.showToast('发送成功');
+      VideoDanmaku? extra;
+      if (response.dmid case final dmid?) {
+        extra = VideoDanmaku(
+          id: dmid,
+          mid: PlPlayerController.instance!.midHash,
+        );
+      }
       widget.callback(
         DanmakuContentItem(
           editController.text,
@@ -485,10 +495,11 @@ class _SendDanmakuPanelState extends CommonPublishPageState<SendDanmakuPanel> {
           },
           selfSend: true,
           isColorful: isColorful,
+          extra: extra,
         ),
       );
     } else {
-      SmartDialog.showToast('发送失败: ${res['msg']}');
+      res.toast();
     }
   }
 }

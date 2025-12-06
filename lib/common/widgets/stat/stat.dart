@@ -1,5 +1,5 @@
 import 'package:PiliPlus/models/common/stat_type.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:flutter/material.dart';
 
 class StatWidget extends StatelessWidget {
@@ -18,28 +18,21 @@ class StatWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    IconData iconData = switch (type) {
-      StatType.view => Icons.remove_red_eye_outlined,
-      StatType.danmaku => Icons.subtitles_outlined,
-      StatType.like => Icons.thumb_up_outlined,
-      StatType.reply => Icons.comment_outlined,
-      StatType.follow => Icons.favorite_border,
-      StatType.play => Icons.play_circle_outlined,
-    };
-
-    Color color = this.color ??
+    Color color =
+        this.color ??
         Theme.of(context).colorScheme.outline.withValues(alpha: 0.8);
-
     return Row(
       spacing: 2,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
-          iconData,
+          type.iconData,
+          semanticLabel: type.label,
           size: iconSize,
           color: color,
         ),
         Text(
-          Utils.numFormat(value),
+          NumUtils.numFormat(value),
           style: TextStyle(fontSize: 12, color: color),
         ),
       ],

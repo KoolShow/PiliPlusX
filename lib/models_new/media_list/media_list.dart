@@ -1,15 +1,14 @@
 import 'package:PiliPlus/models/model_owner.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/cnt_info.dart';
-import 'package:PiliPlus/models_new/media_list/badge.dart';
 import 'package:PiliPlus/models_new/media_list/coin.dart';
 import 'package:PiliPlus/models_new/media_list/ogv_info.dart';
 import 'package:PiliPlus/models_new/media_list/page.dart';
 import 'package:PiliPlus/models_new/media_list/rights.dart';
-import 'package:PiliPlus/utils/extension.dart';
+import 'package:PiliPlus/models_new/video/video_detail/episode.dart';
 
-class MediaListItemModel {
+class MediaListItemModel extends BaseEpisodeItem {
+  @override
   int? get id => aid;
-  int? aid;
   int? offset;
   int? index;
   String? intro;
@@ -17,32 +16,29 @@ class MediaListItemModel {
   int? tid;
   int? copyRight;
   CntInfo? cntInfo;
-  String? cover;
   int? duration;
   int? pubtime;
   int? likeState;
   int? favState;
   int? page;
   List<Page>? pages;
-  String? title;
   int? type;
   Owner? upper;
   String? link;
-  String? bvid;
   String? shortLink;
   Rights? rights;
   dynamic elecInfo;
   Coin? coin;
   OgvInfo? ogvInfo;
   double? progressPercent;
-  Badge? badge;
   bool? forbidFav;
   int? moreType;
   int? businessOid;
-  int? cid;
+  @override
+  int? get cid => pages?.firstOrNull?.id;
 
   MediaListItemModel({
-    this.aid,
+    super.aid,
     this.offset,
     this.index,
     this.intro,
@@ -50,29 +46,29 @@ class MediaListItemModel {
     this.tid,
     this.copyRight,
     this.cntInfo,
-    this.cover,
+    super.cover,
     this.duration,
     this.pubtime,
     this.likeState,
     this.favState,
     this.page,
     this.pages,
-    this.title,
+    super.title,
     this.type,
     this.upper,
     this.link,
-    this.bvid,
+    super.bvid,
     this.shortLink,
     this.rights,
     this.elecInfo,
     this.coin,
     this.ogvInfo,
     this.progressPercent,
-    this.badge,
+    super.badge,
     this.forbidFav,
     this.moreType,
     this.businessOid,
-    this.cid,
+    super.cid,
   });
 
   MediaListItemModel.fromJson(Map<String, dynamic> json) {
@@ -83,8 +79,9 @@ class MediaListItemModel {
     attr = json['attr'] as int?;
     tid = json['tid'] as int?;
     copyRight = json['copy_right'] as int?;
-    cntInfo =
-        json['cnt_info'] == null ? null : CntInfo.fromJson(json['cnt_info']);
+    cntInfo = json['cnt_info'] == null
+        ? null
+        : CntInfo.fromJson(json['cnt_info']);
     cover = json['cover'] as String?;
     duration = json['duration'] as int?;
     pubtime = json['pubtime'] as int?;
@@ -101,13 +98,13 @@ class MediaListItemModel {
     rights = json['rights'] == null ? null : Rights.fromJson(json['rights']);
     elecInfo = json['elec_info'] as dynamic;
     coin = json['coin'] == null ? null : Coin.fromJson(json['coin']);
-    ogvInfo =
-        json['ogv_info'] == null ? null : OgvInfo.fromJson(json['ogv_info']);
+    ogvInfo = json['ogv_info'] == null
+        ? null
+        : OgvInfo.fromJson(json['ogv_info']);
     progressPercent = (json['progress_percent'] as num?)?.toDouble();
-    badge = json['badge'] == null ? null : Badge.fromJson(json['badge']);
+    badge = json['badge']?['text'];
     forbidFav = json['forbid_fav'] as bool?;
     moreType = json['more_type'] as int?;
     businessOid = json['business_oid'] as int?;
-    cid = pages.getOrNull((page ?? 1) - 1)?.id;
   }
 }

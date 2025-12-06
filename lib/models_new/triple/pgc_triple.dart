@@ -1,6 +1,6 @@
 class PgcTriple {
-  int? coin;
-  int? coinNumber;
+  num? coin;
+  num? coinNumber;
   int? favorite;
   int? fmid;
   int? follow;
@@ -18,12 +18,12 @@ class PgcTriple {
   });
 
   factory PgcTriple.fromJson(Map<String, dynamic> json) => PgcTriple(
-        coin: json["coin"],
-        coinNumber: json["coin_number"],
-        favorite: json["favorite"],
-        fmid: json["fmid"],
-        follow: json["follow"],
-        like: json["like"],
-        relation: json["relation"],
-      );
+    coin: json["coin"],
+    coinNumber: json["coin_number"],
+    favorite: json["favorite"],
+    fmid: json["fmid"],
+    follow: json["follow"],
+    like: json["like"],
+    relation: json["relation"],
+  );
 }

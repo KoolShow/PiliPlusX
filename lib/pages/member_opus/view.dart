@@ -1,15 +1,17 @@
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/skeleton/space_opus.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/space/space_opus/item.dart';
 import 'package:PiliPlus/pages/member_opus/controller.dart';
 import 'package:PiliPlus/pages/member_opus/widgets/space_opus_item.dart';
 import 'package:PiliPlus/utils/grid.dart';
+import 'package:PiliPlus/utils/waterfall.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
+import 'package:waterfall_flow/waterfall_flow.dart'
+    hide SliverWaterfallFlowDelegateWithMaxCrossAxisExtent;
 
 class MemberOpus extends StatefulWidget {
   const MemberOpus({
@@ -37,9 +39,12 @@ class _MemberOpusState extends State<MemberOpus>
     tag: widget.heroTag,
   );
 
+  late double _maxWidth;
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final bottom = MediaQuery.viewPaddingOf(context).bottom;
     return Stack(
       children: [
         refreshIndicator(
@@ -52,7 +57,7 @@ class _MemberOpusState extends State<MemberOpus>
                   top: widget.isSingle ? 12 : 0,
                   left: StyleString.safeSpace,
                   right: StyleString.safeSpace,
-                  bottom: MediaQuery.paddingOf(context).bottom + 90,
+                  bottom: bottom + 100,
                 ),
                 sliver: Obx(() => _buildBody(_controller.loadingState.value)),
               ),
@@ -61,8 +66,8 @@ class _MemberOpusState extends State<MemberOpus>
         ),
         if (_controller.filter?.isNotEmpty == true)
           Positioned(
-            right: 16,
-            bottom: MediaQuery.paddingOf(context).bottom + 16,
+            right: kFloatingActionButtonMargin,
+            bottom: bottom + kFloatingActionButtonMargin,
             child: FloatingActionButton.extended(
               onPressed: () => showDialog(
                 context: context,
@@ -85,9 +90,9 @@ class _MemberOpusState extends State<MemberOpus>
                                   ..onReload();
                               },
                               tileColor: e == _controller.type.value
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .onInverseSurface
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.onInverseSurface
                                   : null,
                               dense: true,
                               title: Text(
@@ -103,8 +108,10 @@ class _MemberOpusState extends State<MemberOpus>
               ),
               icon: const Icon(size: 20, Icons.sort),
               label: Obx(
-                () => Text(_controller.type.value.text ??
-                    _controller.type.value.tabName!),
+                () {
+                  final type = _controller.type.value;
+                  return Text(type.text ?? type.tabName!);
+                },
               ),
             ),
           ),
@@ -112,37 +119,44 @@ class _MemberOpusState extends State<MemberOpus>
     );
   }
 
+  late final gridDelegate = SliverWaterfallFlowDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: Grid.smallCardWidth,
+    mainAxisSpacing: StyleString.safeSpace,
+    crossAxisSpacing: StyleString.safeSpace,
+    callback: (value) => _maxWidth = value,
+  );
+
   Widget _buildBody(LoadingState<List<SpaceOpusItemModel>?> loadingState) {
     return switch (loadingState) {
-      Loading() => SliverWaterfallFlow.extent(
-          maxCrossAxisExtent: Grid.smallCardWidth,
-          mainAxisSpacing: StyleString.safeSpace,
-          crossAxisSpacing: StyleString.safeSpace,
-          children: List.generate(10, (_) => const SpaceOpusSkeleton()),
+      Loading() => SliverWaterfallFlow(
+        gridDelegate: gridDelegate,
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => const SpaceOpusSkeleton(),
+          childCount: 10,
         ),
-      Success(:var response) => response?.isNotEmpty == true
-          ? SliverWaterfallFlow.extent(
-              maxCrossAxisExtent: Grid.smallCardWidth,
-              mainAxisSpacing: StyleString.safeSpace,
-              crossAxisSpacing: StyleString.safeSpace,
-              lastChildLayoutTypeBuilder: (index) {
-                if (index == response.length - 1) {
-                  _controller.onLoadMore();
-                }
-                return index == response.length
-                    ? LastChildLayoutType.foot
-                    : LastChildLayoutType.none;
-              },
-              children:
-                  response!.map((item) => SpaceOpusItem(item: item)).toList(),
-            )
-          : HttpError(
-              onReload: _controller.onReload,
-            ),
+      ),
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? SliverWaterfallFlow(
+                gridDelegate: gridDelegate,
+                delegate: SliverChildBuilderDelegate(
+                  (_, index) {
+                    if (index == response.length - 1) {
+                      _controller.onLoadMore();
+                    }
+                    return SpaceOpusItem(
+                      item: response[index],
+                      maxWidth: _maxWidth,
+                    );
+                  },
+                  childCount: response.length,
+                ),
+              )
+            : HttpError(onReload: _controller.onReload),
       Error(:var errMsg) => HttpError(
-          errMsg: errMsg,
-          onReload: _controller.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _controller.onReload,
+      ),
     };
   }
 

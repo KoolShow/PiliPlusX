@@ -1,16 +1,16 @@
-import 'package:flutter/material.dart';
+import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
+import 'package:flutter/material.dart' hide ListTile;
+
+typedef StringGetter = String Function();
 
 class NormalItem extends StatefulWidget {
   final String? title;
-  final Function? getTitle;
+  final StringGetter? getTitle;
   final String? subtitle;
-  final Function? getSubtitle;
+  final StringGetter? getSubtitle;
   final String? setKey;
-  final bool? defaultVal;
-  final ValueChanged<bool>? onChanged;
-  final bool? needReboot;
   final Widget? leading;
-  final Function? getTrailing;
+  final Widget Function()? getTrailing;
   final Function? onTap;
   final EdgeInsetsGeometry? contentPadding;
   final TextStyle? titleStyle;
@@ -21,16 +21,13 @@ class NormalItem extends StatefulWidget {
     this.subtitle,
     this.getSubtitle,
     this.setKey,
-    this.defaultVal,
-    this.onChanged,
-    this.needReboot,
     this.leading,
     this.getTrailing,
     this.onTap,
     this.contentPadding,
     this.titleStyle,
     super.key,
-  });
+  }) : assert(title != null || getTitle != null);
 
   @override
   State<NormalItem> createState() => _NormalItemState();
@@ -42,16 +39,21 @@ class _NormalItemState extends State<NormalItem> {
     return ListTile(
       contentPadding: widget.contentPadding,
       onTap: () => widget.onTap?.call(() {
-        setState(() {});
+        if (mounted) {
+          setState(() {});
+        }
       }),
-      title: Text(widget.title ?? widget.getTitle?.call(),
-          style: widget.titleStyle ?? Theme.of(context).textTheme.titleMedium!),
+      title: Text(
+        widget.title ?? widget.getTitle!(),
+        style: widget.titleStyle ?? Theme.of(context).textTheme.titleMedium!,
+      ),
       subtitle: widget.subtitle != null || widget.getSubtitle != null
-          ? Text(widget.subtitle ?? widget.getSubtitle?.call(),
-              style: Theme.of(context)
-                  .textTheme
-                  .labelMedium!
-                  .copyWith(color: Theme.of(context).colorScheme.outline))
+          ? Text(
+              widget.subtitle ?? widget.getSubtitle!(),
+              style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            )
           : null,
       leading: widget.leading,
       trailing: widget.getTrailing?.call(),

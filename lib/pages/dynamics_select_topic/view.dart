@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:math';
 
+import 'package:PiliPlus/common/widgets/flutter/draggable_sheet/draggable_scrollable_sheet_topic.dart'
+    as topic_sheet;
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_topic_top/topic_item.dart';
 import 'package:PiliPlus/pages/dynamics_select_topic/controller.dart';
 import 'package:PiliPlus/pages/dynamics_select_topic/widgets/item.dart';
+import 'package:PiliPlus/pages/search/controller.dart' show DebounceStreamState;
+import 'package:PiliPlus/utils/context_ext.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:stream_transform/stream_transform.dart';
+import 'package:get/get.dart' hide ContextExtensionss;
 
 class SelectTopicPanel extends StatefulWidget {
   const SelectTopicPanel({
@@ -20,14 +24,43 @@ class SelectTopicPanel extends StatefulWidget {
   final ScrollController? scrollController;
   final ValueChanged<double>? callback;
 
+  static Future<TopicItem?> onSelectTopic(
+    BuildContext context, {
+    double offset = 0,
+    ValueChanged<double>? callback,
+  }) {
+    return showModalBottomSheet<TopicItem?>(
+      context: Get.context!,
+      useSafeArea: true,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxWidth: min(600, context.mediaQueryShortestSide),
+      ),
+      builder: (context) => topic_sheet.DraggableScrollableSheet(
+        expand: false,
+        snap: true,
+        minChildSize: 0,
+        maxChildSize: 1,
+        initialChildSize: offset == 0 ? 0.65 : 1,
+        initialScrollOffset: offset,
+        snapSizes: const [0.65],
+        builder: (context, scrollController) => SelectTopicPanel(
+          scrollController: scrollController,
+          callback: callback,
+        ),
+      ),
+    );
+  }
+
   @override
   State<SelectTopicPanel> createState() => _SelectTopicPanelState();
 }
 
-class _SelectTopicPanelState extends State<SelectTopicPanel> {
+class _SelectTopicPanelState
+    extends DebounceStreamState<SelectTopicPanel, String> {
   final _controller = Get.put(SelectTopicController());
-  final StreamController<String> _ctr = StreamController<String>();
-  late StreamSubscription<String> _sub;
+  @override
+  Duration get duration => const Duration(milliseconds: 300);
 
   @override
   void initState() {
@@ -35,22 +68,16 @@ class _SelectTopicPanelState extends State<SelectTopicPanel> {
     if (_controller.loadingState.value is Error) {
       _controller.onReload();
     }
-    _sub = _ctr.stream
-        .debounce(const Duration(milliseconds: 300), trailing: true)
-        .listen((value) {
-      _controller
-        ..enableClear.value = value.isNotEmpty
-        ..onRefresh().whenComplete(() => WidgetsBinding.instance
-            .addPostFrameCallback((_) => widget.scrollController?.jumpToTop()));
-    });
   }
 
   @override
-  void dispose() {
-    _sub.cancel();
-    _ctr.close();
-    super.dispose();
-  }
+  void onValueChanged(String value) => _controller
+    ..enableClear.value = value.isNotEmpty
+    ..onRefresh().whenComplete(
+      () => WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.scrollController?.jumpToTop(),
+      ),
+    );
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +102,7 @@ class _SelectTopicPanelState extends State<SelectTopicPanel> {
           child: TextField(
             focusNode: _controller.focusNode,
             controller: _controller.controller,
-            onChanged: _ctr.add,
+            onChanged: ctr!.add,
             decoration: InputDecoration(
               border: const OutlineInputBorder(
                 gapPadding: 0,
@@ -91,10 +118,14 @@ class _SelectTopicPanelState extends State<SelectTopicPanel> {
                 padding: EdgeInsets.only(left: 12, right: 4),
                 child: Icon(Icons.search, size: 20),
               ),
-              prefixIconConstraints:
-                  const BoxConstraints(minHeight: 0, minWidth: 0),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              prefixIconConstraints: const BoxConstraints(
+                minHeight: 0,
+                minWidth: 0,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 6,
+              ),
               suffixIcon: Obx(
                 () => _controller.enableClear.value
                     ? Padding(
@@ -115,22 +146,35 @@ class _SelectTopicPanelState extends State<SelectTopicPanel> {
                           onTap: () => _controller
                             ..enableClear.value = false
                             ..controller.clear()
-                            ..onRefresh().whenComplete(() => WidgetsBinding
-                                .instance
-                                .addPostFrameCallback((_) =>
-                                    widget.scrollController?.jumpToTop())),
+                            ..onRefresh().whenComplete(
+                              () =>
+                                  WidgetsBinding.instance.addPostFrameCallback(
+                                    (_) => widget.scrollController?.jumpToTop(),
+                                  ),
+                            ),
                         ),
                       )
                     : const SizedBox.shrink(),
               ),
-              suffixIconConstraints:
-                  const BoxConstraints(minHeight: 0, minWidth: 0),
+              suffixIconConstraints: const BoxConstraints(
+                minHeight: 0,
+                minWidth: 0,
+              ),
             ),
           ),
         ),
         Expanded(
-          child: Material(
-            color: Colors.transparent,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is UserScrollNotification) {
+                if (_controller.focusNode.hasFocus) {
+                  _controller.focusNode.unfocus();
+                }
+              } else if (notification is ScrollEndNotification) {
+                widget.callback?.call(notification.metrics.pixels);
+              }
+              return false;
+            },
             child: Obx(() => _buildBody(theme, _controller.loadingState.value)),
           ),
         ),
@@ -139,26 +183,16 @@ class _SelectTopicPanelState extends State<SelectTopicPanel> {
   }
 
   Widget _buildBody(
-      ThemeData theme, LoadingState<List<TopicItem>?> loadingState) {
+    ThemeData theme,
+    LoadingState<List<TopicItem>?> loadingState,
+  ) {
     return switch (loadingState) {
       Loading() => loadingWidget,
-      Success<List<TopicItem>?>(:var response) => response?.isNotEmpty == true
-          ? NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                if (notification is UserScrollNotification) {
-                  if (_controller.focusNode.hasFocus) {
-                    _controller.focusNode.unfocus();
-                  }
-                } else if (notification is ScrollEndNotification) {
-                  widget.callback?.call(notification.metrics.pixels);
-                }
-                return false;
-              },
-              child: ListView.builder(
+      Success<List<TopicItem>?>(:var response) =>
+        response != null && response.isNotEmpty
+            ? ListView.builder(
                 padding: EdgeInsets.only(
-                  bottom: MediaQuery.paddingOf(context).bottom +
-                      MediaQuery.viewInsetsOf(context).bottom +
-                      80,
+                  bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
                 ),
                 controller: widget.scrollController,
                 itemBuilder: (context, index) {
@@ -170,17 +204,16 @@ class _SelectTopicPanelState extends State<SelectTopicPanel> {
                     onTap: (item) => Get.back(result: item),
                   );
                 },
-                itemCount: response!.length,
-              ),
-            )
-          : _errWidget(),
+                itemCount: response.length,
+              )
+            : _errWidget(),
       Error(:var errMsg) => _errWidget(errMsg),
     };
   }
 
   Widget _errWidget([String? errMsg]) => scrollErrorWidget(
-        errMsg: errMsg,
-        controller: widget.scrollController,
-        onReload: _controller.onReload,
-      );
+    errMsg: errMsg,
+    controller: widget.scrollController,
+    onReload: _controller.onReload,
+  );
 }

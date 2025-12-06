@@ -5,42 +5,48 @@ import 'package:PiliPlus/http/follow.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/dynamics/up.dart';
-import 'package:PiliPlus/models_new/follow/list.dart';
+import 'package:PiliPlus/models_new/follow/data.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:PiliPlus/pages/dynamics_tab/controller.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class DynamicsController extends GetxController
     with GetSingleTickerProviderStateMixin, ScrollOrRefreshMixin {
   @override
   final ScrollController scrollController = ScrollController();
-  String? offset = '';
-  Rx<FollowUpModel> upData = FollowUpModel().obs;
-  // 默认获取全部动态
-  RxInt mid = (-1).obs;
-  late TabController tabController;
-  Set<int> tempBannedList = <int>{};
-  List<UpItem> hasUpdatedUps = <UpItem>[];
-  int allFollowedUpsPage = 1;
-  int allFollowedUpsTotal = 0;
+  late final TabController tabController = TabController(
+    length: DynamicsTabType.values.length,
+    vsync: this,
+    initialIndex: Pref.defaultDynamicType,
+  );
 
+  late final RxInt mid = (-1).obs;
   late int currentMid = -1;
-  late bool showLiveItems = GStorage.expandDynLivePanel;
 
-  final upPanelPosition = GStorage.upPanelPosition;
+  Set<int> tempBannedList = <int>{};
+
+  final Rx<LoadingState<FollowUpModel>> upState =
+      LoadingState<FollowUpModel>.loading().obs;
+  late int _upPage = 1;
+  late bool _upEnd = false;
+  List<UpItem>? _cacheUpList;
+  late final _showAllUp = Pref.dynamicsShowAllFollowedUp;
+  late bool showLiveUp = Pref.expandDynLivePanel;
+
+  final upPanelPosition = Pref.upPanelPosition;
 
   AccountService accountService = Get.find<AccountService>();
 
   DynamicsTabController? get controller {
     try {
       return Get.find<DynamicsTabController>(
-          tag: DynamicsTabType.values[tabController.index].name);
+        tag: DynamicsTabType.values[tabController.index].name,
+      );
     } catch (_) {
       return null;
     }
@@ -49,116 +55,121 @@ class DynamicsController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    tabController = TabController(
-      length: DynamicsTabType.values.length,
-      vsync: this,
-      initialIndex: GStorage.setting
-          .get(SettingBoxKey.defaultDynamicType, defaultValue: 0),
-    );
-
     queryFollowUp();
   }
 
-  Future<void> queryFollowing2() async {
-    if (upData.value.upList != null &&
-        upData.value.upList!.length >= allFollowedUpsTotal) {
-      return;
-    }
-    var res = await FollowHttp.followings(
-      vmid: accountService.mid,
-      pn: allFollowedUpsPage,
-      ps: 50,
-      orderType: 'attention',
-    );
-    if (res.isSuccess) {
-      upData.value.upList ??= <UpItem>[];
-      upData.value.upList!.addAll(
-        res.data.list!
-            .where((e) => hasUpdatedUps.every((e1) => e.mid != e1.mid))
-            .map(
-              (FollowItemModel e) => UpItem(
-                face: e.face,
-                mid: e.mid,
-                uname: e.uname,
-                hasUpdate: false,
-              ),
-            ),
-      );
-      allFollowedUpsPage += 1;
-      allFollowedUpsTotal = res.data.total!;
-      upData.refresh();
+  void onLoadMoreUp() {
+    if (_showAllUp) {
+      queryAllUp();
     } else {
-      res.toast();
+      queryUpList();
     }
   }
 
+  Future<void> queryUpList() async {
+    if (isQuerying || _upEnd) return;
+    isQuerying = true;
+
+    final res = await DynamicsHttp.dynUpList(upState.value.data.offset);
+
+    if (res.isSuccess) {
+      final data = res.data;
+      if (data.hasMore == false || data.offset.isNullOrEmpty) {
+        _upEnd = true;
+      }
+      final upData = upState.value.data
+        ..hasMore = data.hasMore
+        ..offset = data.offset;
+      final list = data.upList;
+      if (list != null && list.isNotEmpty) {
+        upData.upList.addAll(list);
+        upState.refresh();
+      }
+    }
+
+    isQuerying = false;
+  }
+
+  Future<void> queryAllUp() async {
+    if (isQuerying || _upEnd) return;
+    isQuerying = true;
+
+    final res = await FollowHttp.followings(
+      vmid: accountService.mid,
+      pn: _upPage,
+      orderType: 'attention',
+      ps: 50,
+    );
+
+    if (res.isSuccess) {
+      _upPage++;
+      final list = res.data.list;
+      if (list.isEmpty) {
+        _upEnd = true;
+      }
+      upState
+        ..value.data.upList.addAll(
+          list..removeWhere((e) => _cacheUpList?.contains(e) == true),
+        )
+        ..refresh();
+    }
+
+    isQuerying = false;
+  }
+
   late bool isQuerying = false;
-  Future<void> queryFollowUp({String type = 'init'}) async {
+  Future<void> queryFollowUp() async {
     if (isQuerying) return;
     isQuerying = true;
+
     if (!accountService.isLogin.value) {
-      upData
-        ..value.errMsg = '账号未登录'
-        ..refresh();
+      upState.value = const Error(null);
+      isQuerying = false;
+      return;
     }
-    upData.value.errMsg = null;
-    if (GStorage.setting
-        .get(SettingBoxKey.dynamicsShowAllFollowedUp, defaultValue: false)) {
-      allFollowedUpsPage = 1;
-      final f1 = DynamicsHttp.followUp();
-      final f2 = FollowHttp.followings(
-        vmid: accountService.mid,
-        pn: allFollowedUpsPage,
-        ps: 50,
-        orderType: 'attention',
-      );
-      final res0 = await f1;
-      if (!res0.isSuccess) {
-        SmartDialog.showToast("获取关注动态失败：$res0");
-        upData
-          ..value.errMsg = (res0 as Error).errMsg
-          ..refresh();
-      } else {
-        upData
-          ..value.liveUsers = res0.data.liveUsers
-          ..refresh();
-        hasUpdatedUps = res0.data.upList!;
-      }
-      List<UpItem> allFollowedUps = <UpItem>[];
-      final res1 = await f2;
-      if (!res1.isSuccess) {
-        SmartDialog.showToast("获取关注列表失败：$res1");
-      } else {
-        allFollowedUps = res1.data.list!
-            .where((e) => hasUpdatedUps.every((e1) => e.mid != e1.mid))
-            .map(
-              (e) => UpItem(
-                face: e.face,
-                mid: e.mid,
-                uname: e.uname,
-                hasUpdate: false,
-              ),
-            )
-            .toList();
-        allFollowedUpsPage += 1;
-        allFollowedUpsTotal = res1.data.total!;
-      }
-      upData
-        ..value.upList = hasUpdatedUps + allFollowedUps
-        ..refresh();
-    } else {
-      var res = await DynamicsHttp.followUp();
-      if (res.isSuccess) {
-        upData.value = res.data;
-        if (upData.value.upList!.isEmpty) {
-          mid.value = -1;
+
+    // reset
+    _upEnd = false;
+    if (_showAllUp) _upPage = 1;
+
+    final res = await Future.wait([
+      DynamicsHttp.followUp(),
+      if (_showAllUp)
+        FollowHttp.followings(
+          vmid: accountService.mid,
+          pn: _upPage,
+          orderType: 'attention',
+          ps: 50,
+        ),
+    ]);
+
+    final first = res.first;
+    if (first.isSuccess) {
+      FollowUpModel data = first.data as FollowUpModel;
+      final second = res.getOrNull(1);
+      if (second != null && second.isSuccess) {
+        FollowData data1 = second.data as FollowData;
+        final list1 = data1.list;
+
+        _upPage++;
+        if (list1.isEmpty || list1.length >= (data1.total ?? 0)) {
+          _upEnd = true;
         }
-      } else {
-        upData
-          ..value.errMsg = (res as Error).errMsg
-          ..refresh();
+
+        final list = data.upList;
+        _cacheUpList = List<UpItem>.from(list);
+        list.addAll(list1..removeWhere(list.contains));
       }
+      if (!_showAllUp) {
+        if (data.hasMore == false || data.offset.isNullOrEmpty) {
+          _upEnd = true;
+        }
+      }
+      upState.value = Success(data);
+    } else {
+      upState.value = const Error(null);
     }
+
     isQuerying = false;
   }
 
@@ -178,6 +189,10 @@ class DynamicsController extends GetxController
 
   @override
   Future<void> onRefresh() async {
+    if (_showAllUp) {
+      _upPage = 1;
+      _cacheUpList = null;
+    }
     queryFollowUp();
     await controller?.onRefresh();
   }
@@ -198,7 +213,10 @@ class DynamicsController extends GetxController
           scrollController.animToTop();
         }
         EasyThrottle.throttle(
-            'topOrRefresh', const Duration(milliseconds: 500), onRefresh);
+          'topOrRefresh',
+          const Duration(milliseconds: 500),
+          onRefresh,
+        );
       } else {
         animateToTop();
       }

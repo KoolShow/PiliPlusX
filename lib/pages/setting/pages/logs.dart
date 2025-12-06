@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
-import 'package:PiliPlus/services/loggeer.dart';
+import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -16,16 +19,18 @@ class LogsPage extends StatefulWidget {
   State<LogsPage> createState() => _LogsPageState();
 }
 
+typedef _LogInfo = ({Object? date, String body});
+
 class _LogsPageState extends State<LogsPage> {
   late File logsPath;
   late String fileContent;
-  List logsContent = [];
+  List<_LogInfo> logsContent = [];
   DateTime? latestLog;
-  late bool enableLog = GStorage.enableLog;
+  late bool enableLog = Pref.enableLog;
 
   @override
   void initState() {
-    getPath();
+    getLog();
     super.initState();
   }
 
@@ -33,35 +38,36 @@ class _LogsPageState extends State<LogsPage> {
   void dispose() {
     if (latestLog != null) {
       if (DateTime.now().difference(latestLog!) >= const Duration(days: 14)) {
-        clearLogs();
+        LoggerUtils.clearLogs();
       }
     }
     super.dispose();
   }
 
-  Future<void> getPath() async {
-    logsPath = await getLogsPath();
+  Future<void> getLog() async {
+    logsPath = await LoggerUtils.getLogsPath();
     fileContent = await logsPath.readAsString();
     logsContent = parseLogs(fileContent);
     setState(() {});
   }
 
-  List<Map<String, dynamic>> parseLogs(String fileContent) {
+  List<_LogInfo> parseLogs(String fileContent) {
     const String splitToken =
         '======================================================================';
     List contentList = fileContent.split(splitToken).map((item) {
       return item
           .replaceAll(
-              '============================== CATCHER 2 LOG ==============================',
-              'PiliPlus错误日志\n********************')
+            '============================== CATCHER 2 LOG ==============================',
+            '${Constants.appName}错误日志\n********************',
+          )
           .replaceAll('DEVICE INFO', '设备信息')
           .replaceAll('APP INFO', '应用信息')
           .replaceAll('ERROR', '错误信息')
           .replaceAll('STACK TRACE', '错误堆栈');
     }).toList();
-    List<Map<String, dynamic>> result = [];
+    List<_LogInfo> result = [];
     for (String i in contentList) {
-      dynamic date;
+      Object? date;
       String body = i
           .split("\n")
           .map((l) {
@@ -81,7 +87,7 @@ class _LogsPageState extends State<LogsPage> {
           .where((l) => l.replaceAll("\n", "").trim().isNotEmpty)
           .join("\n");
       if (date != null || body != '') {
-        result.add({'date': date, 'body': body, 'expand': false});
+        result.add((date: date, body: body));
       }
     }
     return result.reversed.toList();
@@ -97,12 +103,12 @@ class _LogsPageState extends State<LogsPage> {
   }
 
   Future<void> clearLogsHandle() async {
-    if (await clearLogs()) {
+    if (await LoggerUtils.clearLogs()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已清空')),
         );
-        logsContent = [];
+        logsContent.clear();
         setState(() {});
       }
     }
@@ -110,7 +116,9 @@ class _LogsPageState extends State<LogsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.viewPaddingOf(context);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('日志'),
         actions: [
@@ -126,8 +134,7 @@ class _LogsPageState extends State<LogsPage> {
                   copyLogs();
                   break;
                 case 'feedback':
-                  PageUtils.launchURL(
-                      'https://github.com/bggRGjQaUbCoE/PiliPlus/issues');
+                  PageUtils.launchURL('${Constants.sourceCodeUrl}/issues');
                   break;
                 case 'clear':
                   clearLogsHandle();
@@ -158,78 +165,75 @@ class _LogsPageState extends State<LogsPage> {
         ],
       ),
       body: logsContent.isNotEmpty
-          ? SafeArea(
-              bottom: false,
-              child: ListView.separated(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.paddingOf(context).bottom + 80,
-                ),
-                itemCount: logsContent.length,
-                itemBuilder: (context, index) {
-                  final log = logsContent[index];
-                  if (log['date'] is DateTime) {
-                    latestLog ??= log['date'];
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 5,
-                      children: [
-                        Row(
-                          spacing: 10,
-                          children: [
-                            Text(
-                              log['date'].toString(),
-                              style: TextStyle(
-                                fontSize: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium!
-                                    .fontSize,
-                              ),
+          ? ListView.separated(
+              padding: EdgeInsets.only(
+                left: padding.left,
+                right: padding.right,
+                bottom: padding.bottom + 100,
+              ),
+              itemCount: logsContent.length,
+              itemBuilder: (context, index) {
+                final log = logsContent[index];
+                if (log.date case DateTime date) {
+                  latestLog ??= date;
+                }
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 5,
+                    children: [
+                      Row(
+                        spacing: 10,
+                        children: [
+                          Text(
+                            log.date.toString(),
+                            style: TextStyle(
+                              fontSize: Theme.of(
+                                context,
+                              ).textTheme.titleMedium!.fontSize,
                             ),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              onPressed: () {
-                                Utils.copyText('```\n${log['body']}\n```',
-                                    needToast: false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '已将 ${log['date'].toString()} 复制至剪贴板',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.copy_outlined, size: 16),
-                              label: const Text('复制'),
-                            )
-                          ],
-                        ),
-                        Card(
-                          elevation: 1,
-                          margin: EdgeInsets.zero,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12.0),
-                            child: SelectableText(log['body']),
                           ),
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () {
+                              Utils.copyText(
+                                '```\n${log.body}\n```',
+                                needToast: false,
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '已将 ${log.date} 复制至剪贴板',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.copy_outlined, size: 16),
+                            label: const Text('复制'),
+                          ),
+                        ],
+                      ),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: SelectableText(log.body),
                         ),
-                      ],
-                    ),
-                  );
-                },
-                separatorBuilder: (context, index) => const Divider(
-                  indent: 12,
-                  endIndent: 12,
-                  height: 24,
-                ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              separatorBuilder: (context, index) => const Divider(
+                indent: 12,
+                endIndent: 12,
+                height: 24,
               ),
             )
           : scrollErrorWidget(),

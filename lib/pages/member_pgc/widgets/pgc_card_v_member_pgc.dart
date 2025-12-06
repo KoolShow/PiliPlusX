@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models_new/space/space_archive/item.dart';
@@ -16,31 +17,31 @@ class PgcCardVMemberPgc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String heroTag = Utils.makeHeroTag(item.param);
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Card(
-      clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: StyleString.mdRadius),
       child: InkWell(
+        borderRadius: StyleString.mdRadius,
         onTap: () => PageUtils.viewPgc(seasonId: item.param),
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-        ),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
               aspectRatio: 0.75,
-              child: LayoutBuilder(builder: (context, boxConstraints) {
-                return Hero(
-                  tag: heroTag,
-                  child: NetworkImgLayer(
+              child: LayoutBuilder(
+                builder: (context, boxConstraints) {
+                  return NetworkImgLayer(
                     src: item.cover,
                     width: boxConstraints.maxWidth,
                     height: boxConstraints.maxHeight,
-                  ),
-                );
-              }),
+                  );
+                },
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 5, 0, 3),

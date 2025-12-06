@@ -1,20 +1,20 @@
-import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/flutter/page/tabs.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
-import 'package:PiliPlus/common/widgets/page/tabs.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
-import 'package:PiliPlus/pages/common/common_collapse_slide_page.dart';
+import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/pgc_review/view.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
+import 'package:PiliPlus/pages/video/introduction/ugc/widgets/selectable_text.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart' hide TabBarView;
 import 'package:get/get.dart';
 
-class PgcIntroPanel extends CommonCollapseSlidePage {
+class PgcIntroPanel extends CommonSlidePage {
   final PgcInfoModel item;
   final List<VideoTagItem>? videoTags;
 
@@ -29,7 +29,8 @@ class PgcIntroPanel extends CommonCollapseSlidePage {
   State<PgcIntroPanel> createState() => _IntroDetailState();
 }
 
-class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
+class _IntroDetailState extends State<PgcIntroPanel>
+    with TickerProviderStateMixin, CommonSlideMixin {
   late final _tabController = TabController(length: 2, vsync: this);
   final _controller = ScrollController();
 
@@ -55,7 +56,10 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               dividerColor: Colors.transparent,
-              tabs: const [Tab(text: '详情'), Tab(text: '点评')],
+              tabs: const [
+                Tab(text: '详情'),
+                Tab(text: '点评'),
+              ],
               onTap: (index) {
                 if (!_tabController.indexIsChanging) {
                   if (index == 0) {
@@ -65,14 +69,12 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
               },
             ),
           ),
-          iconButton(
-            context: context,
-            icon: Icons.clear,
+          IconButton(
+            tooltip: '关闭',
+            icon: const Icon(Icons.close, size: 20),
             onPressed: Get.back,
-            iconSize: 22,
-            bgColor: Colors.transparent,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 2),
         ],
       ),
       children: [
@@ -91,6 +93,9 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
       fontSize: 12,
       color: theme.colorScheme.onSurface,
     );
+    final TextStyle textStyle = TextStyle(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     return ListView(
       controller: _controller,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -98,10 +103,10 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
         left: 14,
         right: 14,
         top: 14,
-        bottom: MediaQuery.paddingOf(context).bottom + 80,
+        bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
       ),
       children: [
-        SelectableText(
+        selectableText(
           widget.item.title!,
           style: const TextStyle(fontSize: 16),
         ),
@@ -111,11 +116,11 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
           children: [
             StatWidget(
               type: StatType.play,
-              value: widget.item.stat!.views,
+              value: widget.item.stat!.view,
             ),
             StatWidget(
               type: StatType.danmaku,
-              value: widget.item.stat!.danmakus,
+              value: widget.item.stat!.danmaku,
             ),
           ],
         ),
@@ -138,26 +143,30 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
-        Text(
-          '简介：',
-          style: theme.textTheme.titleMedium,
-        ),
-        const SizedBox(height: 4),
-        SelectableText(
-          widget.item.evaluate!,
-          style: smallTitle.copyWith(fontSize: 14),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          '声优：',
-          style: theme.textTheme.titleMedium,
-        ),
-        const SizedBox(height: 4),
-        SelectableText(
-          widget.item.actors!,
-          style: smallTitle.copyWith(fontSize: 14),
-        ),
+        if (widget.item.evaluate?.isNotEmpty == true) ...[
+          const SizedBox(height: 20),
+          Text(
+            '简介：',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          selectableText(
+            widget.item.evaluate!,
+            style: textStyle,
+          ),
+        ],
+        if (widget.item.actors?.isNotEmpty == true) ...[
+          const SizedBox(height: 20),
+          Text(
+            '演职人员：',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.item.actors!,
+            style: textStyle,
+          ),
+        ],
         if (widget.videoTags?.isNotEmpty == true) ...[
           const SizedBox(height: 10),
           Wrap(
@@ -176,7 +185,7 @@ class _IntroDetailState extends CommonCollapseSlidePageState<PgcIntroPanel> {
                   ),
                 )
                 .toList(),
-          )
+          ),
         ],
       ],
     );

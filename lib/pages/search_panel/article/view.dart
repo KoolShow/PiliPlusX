@@ -19,8 +19,14 @@ class SearchArticlePanel extends CommonSearchPanel {
   State<SearchArticlePanel> createState() => _SearchArticlePanelState();
 }
 
-class _SearchArticlePanelState extends CommonSearchPanelState<
-    SearchArticlePanel, SearchArticleData, SearchArticleItemModel> {
+class _SearchArticlePanelState
+    extends
+        CommonSearchPanelState<
+          SearchArticlePanel,
+          SearchArticleData,
+          SearchArticleItemModel
+        >
+    with GridMixin {
   @override
   late final SearchArticleController controller = Get.put(
     SearchArticleController(
@@ -46,7 +52,7 @@ class _SearchArticlePanelState extends CommonSearchPanelState<
             children: [
               Obx(
                 () => Text(
-                  '排序: ${controller.orderFiltersList[controller.currentOrderFilterval.value]['label']}',
+                  '排序: ${controller.articleOrderType.value.label}',
                   maxLines: 1,
                   style: TextStyle(color: theme.colorScheme.outline),
                 ),
@@ -54,7 +60,7 @@ class _SearchArticlePanelState extends CommonSearchPanelState<
               const Spacer(),
               Obx(
                 () => Text(
-                  '分区: ${controller.zoneFiltersList[controller.currentZoneFilterval.value]['label']}',
+                  '分区: ${controller.articleZoneType!.value.label}',
                   maxLines: 1,
                   style: TextStyle(color: theme.colorScheme.outline),
                 ),
@@ -65,8 +71,8 @@ class _SearchArticlePanelState extends CommonSearchPanelState<
                 height: 32,
                 child: IconButton(
                   tooltip: '筛选',
-                  style: ButtonStyle(
-                    padding: WidgetStateProperty.all(EdgeInsets.zero),
+                  style: const ButtonStyle(
+                    padding: WidgetStatePropertyAll(EdgeInsets.zero),
                   ),
                   onPressed: () => controller.onShowFilterDialog(context),
                   icon: Icon(
@@ -85,17 +91,18 @@ class _SearchArticlePanelState extends CommonSearchPanelState<
 
   @override
   Widget buildList(ThemeData theme, List<SearchArticleItemModel> list) {
-    return SliverGrid(
-      gridDelegate: Grid.videoCardHDelegate(context),
-      delegate: SliverChildBuilderDelegate(
-        (BuildContext context, int index) {
-          if (index == list.length - 1) {
-            controller.onLoadMore();
-          }
-          return SearchArticleItem(item: list[index]);
-        },
-        childCount: list.length,
-      ),
+    return SliverGrid.builder(
+      gridDelegate: gridDelegate,
+      itemBuilder: (context, index) {
+        if (index == list.length - 1) {
+          controller.onLoadMore();
+        }
+        return SearchArticleItem(item: list[index]);
+      },
+      itemCount: list.length,
     );
   }
+
+  @override
+  Widget get buildLoading => gridSkeleton;
 }

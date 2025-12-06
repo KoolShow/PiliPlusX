@@ -6,8 +6,8 @@ class AudioSessionHandler {
   late AudioSession session;
   bool _playInterrupted = false;
 
-  void setActive(bool active) {
-    session.setActive(active);
+  Future<bool> setActive(bool active) {
+    return session.setActive(active);
   }
 
   AudioSessionHandler() {
@@ -27,7 +27,8 @@ class AudioSessionHandler {
         switch (event.type) {
           case AudioInterruptionType.duck:
             PlPlayerController.setVolumeIfExists(
-                (PlPlayerController.getVolumeIfExists() ?? 0) * 0.5);
+              (PlPlayerController.getVolumeIfExists() ?? 0) * 0.5,
+            );
             // player.setVolume(player.volume.value * 0.5);
             break;
           case AudioInterruptionType.pause:
@@ -45,7 +46,8 @@ class AudioSessionHandler {
         switch (event.type) {
           case AudioInterruptionType.duck:
             PlPlayerController.setVolumeIfExists(
-                (PlPlayerController.getVolumeIfExists() ?? 0) * 2);
+              (PlPlayerController.getVolumeIfExists() ?? 0) * 2,
+            );
             // player.setVolume(player.volume.value * 2);
             break;
           case AudioInterruptionType.pause:

@@ -1,15 +1,16 @@
 import 'dart:async';
+import 'dart:io' show File;
 
+import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/grpc/bilibili/im/type.pb.dart' show Msg;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/msg.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models/common/publish_panel_type.dart';
 import 'package:PiliPlus/models_new/upload_bfs/data.dart';
-import 'package:PiliPlus/pages/common/common_publish_page.dart';
+import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
 import 'package:PiliPlus/pages/emote/view.dart';
 import 'package:PiliPlus/pages/whisper_detail/controller.dart';
 import 'package:PiliPlus/pages/whisper_detail/widget/chat_item.dart';
@@ -17,14 +18,13 @@ import 'package:PiliPlus/pages/whisper_link_setting/view.dart';
 import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
+import 'package:flutter/material.dart' hide TextField;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
-class WhisperDetailPage extends CommonPublishPage {
+class WhisperDetailPage extends CommonRichTextPubPage {
   const WhisperDetailPage({
     super.key,
     super.autofocus = false,
@@ -35,7 +35,7 @@ class WhisperDetailPage extends CommonPublishPage {
 }
 
 class _WhisperDetailPageState
-    extends CommonPublishPageState<WhisperDetailPage> {
+    extends CommonRichTextPubPageState<WhisperDetailPage> {
   final _whisperDetailController = Get.put(
     WhisperDetailController(),
     tag: Utils.makeHeroTag(Get.parameters['talkerId']),
@@ -44,6 +44,12 @@ class _WhisperDetailPageState
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final padding = MediaQuery.viewPaddingOf(context);
+    late final containerColor = ElevationOverlay.colorWithOverlay(
+      theme.colorScheme.surface,
+      theme.hoverColor,
+      1,
+    );
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
@@ -67,18 +73,15 @@ class _WhisperDetailPageState
           ),
         ),
         title: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () {
             if (_whisperDetailController.mid != null) {
               feedBack();
-              Get.toNamed(
-                '/member?mid=${_whisperDetailController.mid}',
-                arguments: {
-                  'face': _whisperDetailController.face,
-                },
-              );
+              Get.toNamed('/member?mid=${_whisperDetailController.mid}');
             }
           },
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               NetworkImgLayer(
                 width: 34,
@@ -87,22 +90,37 @@ class _WhisperDetailPageState
                 src: _whisperDetailController.face,
               ),
               const SizedBox(width: 6),
-              Expanded(
+              Flexible(
                 child: Text(
                   _whisperDetailController.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium,
+                  style: const TextStyle(height: 1, fontSize: 16),
+                  strutStyle: const StrutStyle(
+                    leading: 0,
+                    height: 1,
+                    fontSize: 16,
+                  ),
                 ),
               ),
+              if (_whisperDetailController.isLive) ...[
+                const SizedBox(width: 10),
+                Image.asset(
+                  'assets/images/live/live.gif',
+                  height: 16,
+                  filterQuality: FilterQuality.low,
+                ),
+              ],
             ],
           ),
         ),
         actions: [
           IconButton(
-            onPressed: () => Get.to(WhisperLinkSettingPage(
-              talkerUid: _whisperDetailController.talkerId,
-            )),
+            onPressed: () => Get.to(
+              WhisperLinkSettingPage(
+                talkerUid: _whisperDetailController.talkerId,
+              ),
+            ),
             icon: Icon(
               size: 20,
               Icons.settings,
@@ -112,9 +130,11 @@ class _WhisperDetailPageState
           const SizedBox(width: 10),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
+      body: Padding(
+        padding: EdgeInsets.only(
+          left: padding.left,
+          right: padding.right,
+        ),
         child: Column(
           children: [
             Expanded(
@@ -123,18 +143,23 @@ class _WhisperDetailPageState
                   hidePanel();
                 },
                 behavior: HitTestBehavior.opaque,
-                child: refreshIndicator(
-                  onRefresh: _whisperDetailController.onRefresh,
-                  child: Obx(() =>
-                      _buildBody(_whisperDetailController.loadingState.value)),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Obx(
+                    () =>
+                        _buildBody(_whisperDetailController.loadingState.value),
+                  ),
                 ),
               ),
             ),
             if (_whisperDetailController.mid != null) ...[
-              _buildInputView(theme),
-              buildPanelContainer(theme.colorScheme.onInverseSurface),
+              _buildInputView(theme, containerColor),
+              buildPanelContainer(
+                theme,
+                containerColor,
+              ),
             ] else
-              SizedBox(height: MediaQuery.paddingOf(context).bottom),
+              SizedBox(height: padding.bottom),
           ],
         ),
       ),
@@ -144,39 +169,40 @@ class _WhisperDetailPageState
   Widget _buildBody(LoadingState<List<Msg>?> loadingState) {
     return switch (loadingState) {
       Loading() => loadingWidget,
-      Success(:var response) => response?.isNotEmpty == true
-          ? ListView.separated(
-              shrinkWrap: true,
-              reverse: true,
-              itemCount: response!.length,
-              padding: const EdgeInsets.all(14),
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: ClampingScrollPhysics(),
-              ),
-              controller: _whisperDetailController.scrollController,
-              itemBuilder: (context, int index) {
-                if (index == response.length - 1) {
-                  _whisperDetailController.onLoadMore();
-                }
-                final item = response[index];
-                return ChatItem(
-                  item: item,
-                  eInfos: _whisperDetailController.eInfos,
-                  onLongPress: item.senderUid.toInt() ==
-                          _whisperDetailController.accountService.mid
-                      ? () => onLongPress(index, item)
-                      : null,
-                );
-              },
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-            )
-          : scrollErrorWidget(
-              onReload: _whisperDetailController.onReload,
-            ),
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? ListView.separated(
+                shrinkWrap: true,
+                reverse: true,
+                itemCount: response.length,
+                padding: const EdgeInsets.all(14),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: ClampingScrollPhysics(),
+                ),
+                controller: _whisperDetailController.scrollController,
+                itemBuilder: (context, int index) {
+                  if (index == response.length - 1) {
+                    _whisperDetailController.onLoadMore();
+                  }
+                  final item = response[index];
+                  return ChatItem(
+                    item: item,
+                    eInfos: _whisperDetailController.eInfos,
+                    onLongPress:
+                        item.senderUid.toInt() ==
+                            _whisperDetailController.account.mid
+                        ? () => onLongPress(index, item)
+                        : null,
+                  );
+                },
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
+              )
+            : scrollErrorWidget(onReload: _whisperDetailController.onReload),
       Error(:var errMsg) => scrollErrorWidget(
-          errMsg: errMsg,
-          onReload: _whisperDetailController.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _whisperDetailController.onReload,
+      ),
     };
   }
 
@@ -213,15 +239,12 @@ class _WhisperDetailPageState
     );
   }
 
-  Widget _buildInputView(ThemeData theme) {
+  Widget _buildInputView(ThemeData theme, Color containerColor) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.onInverseSurface,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-        ),
+        color: containerColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -244,20 +267,14 @@ class _WhisperDetailPageState
                 }
               },
               child: Obx(
-                () => TextField(
+                () => RichTextField(
+                  key: key,
                   readOnly: readOnly.value,
                   focusNode: focusNode,
                   controller: editController,
                   minLines: 1,
                   maxLines: 4,
-                  onChanged: (value) {
-                    bool isNotEmpty = value.trim().isNotEmpty;
-                    if (isNotEmpty && !enablePublish.value) {
-                      enablePublish.value = true;
-                    } else if (!isNotEmpty && enablePublish.value) {
-                      enablePublish.value = false;
-                    }
-                  },
+                  onChanged: onChanged,
                   textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
                     filled: true,
@@ -270,36 +287,40 @@ class _WhisperDetailPageState
                     ),
                     contentPadding: const EdgeInsets.all(10),
                   ),
-                  inputFormatters: [LengthLimitingTextInputFormatter(500)],
+                  // inputFormatters: [LengthLimitingTextInputFormatter(500)],
                 ),
               ),
             ),
           ),
           Obx(
             () {
+              final enablePublish = this.enablePublish.value;
               return IconButton(
                 onPressed: () async {
-                  if (enablePublish.value) {
+                  if (enablePublish) {
                     _whisperDetailController.sendMsg(
-                      message: editController.text,
-                      onClearText: editController.clear,
+                      message: editController.rawText,
+                      onClearText: () {
+                        editController.clear();
+                        this.enablePublish.value = false;
+                      },
                     );
                   } else {
                     try {
-                      XFile? pickedFile = await imagePicker.pickImage(
+                      final XFile? pickedFile = await imagePicker.pickImage(
                         source: ImageSource.gallery,
                         imageQuality: 100,
                       );
                       if (pickedFile != null) {
+                        final path = pickedFile.path;
                         SmartDialog.showLoading(msg: '正在上传图片');
                         final result = await MsgHttp.uploadBfs(
-                          path: pickedFile.path,
+                          path: path,
                           biz: 'im',
                         );
                         if (result['status']) {
-                          String mimeType = lookupMimeType(pickedFile.path)
-                                  ?.split('/')
-                                  .getOrNull(1) ??
+                          String mimeType =
+                              lookupMimeType(path)?.split('/').getOrNull(1) ??
                               'jpg';
                           UploadBfsResData data = result['data'];
                           Map picMsg = {
@@ -311,11 +332,16 @@ class _WhisperDetailPageState
                             'size': data.imgSize,
                           };
                           SmartDialog.showLoading(msg: '正在发送');
-                          await _whisperDetailController.sendMsg(
-                            picMsg: picMsg,
-                            message: editController.text,
-                            onClearText: editController.clear,
-                          );
+                          await _whisperDetailController
+                              .sendMsg(
+                                picMsg: picMsg,
+                                onClearText: editController.clear,
+                              )
+                              .whenComplete(() {
+                                if (Utils.isMobile) {
+                                  File(path).tryDel();
+                                }
+                              });
                         } else {
                           SmartDialog.dismiss();
                           SmartDialog.showToast(result['msg']);
@@ -327,10 +353,12 @@ class _WhisperDetailPageState
                     }
                   }
                 },
-                icon: Icon(enablePublish.value
-                    ? Icons.send
-                    : Icons.add_photo_alternate_outlined),
-                tooltip: enablePublish.value ? '发送' : '图片',
+                icon: Icon(
+                  enablePublish
+                      ? Icons.send
+                      : Icons.add_photo_alternate_outlined,
+                ),
+                tooltip: enablePublish ? '发送' : '图片',
               );
             },
           ),
@@ -343,7 +371,15 @@ class _WhisperDetailPageState
   Widget? get customPanel => EmotePanel(onChoose: onChooseEmote);
 
   @override
-  Future<void> onCustomPublish({required String message, List? pictures}) {
+  Future<void> onCustomPublish({List? pictures}) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<void> onMention([bool fromClick = false]) {
+    return Future.value();
+  }
+
+  @override
+  void onSave() {}
 }

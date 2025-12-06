@@ -8,14 +8,14 @@ sealed class LoadingState<T> {
   bool get isSuccess => this is Success<T>;
 
   T get data => switch (this) {
-        Success(:var response) => response,
-        _ => throw this,
-      };
+    Success(:var response) => response,
+    _ => throw this,
+  };
 
   T? get dataOrNull => switch (this) {
-        Success(:var response) => response,
-        _ => null,
-      };
+    Success(:var response) => response,
+    _ => null,
+  };
 
   void toast() => SmartDialog.showToast(toString());
 }
@@ -53,8 +53,9 @@ class Success<T> extends LoadingState<T> {
 }
 
 class Error extends LoadingState<Never> {
+  final int? code;
   final String? errMsg;
-  const Error(this.errMsg);
+  const Error(this.errMsg, {this.code});
 
   @override
   bool operator ==(Object other) {
@@ -72,6 +73,6 @@ class Error extends LoadingState<Never> {
 
   @override
   String toString() {
-    return errMsg ?? '';
+    return errMsg ?? code?.toString() ?? '';
   }
 }

@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
 
@@ -14,17 +15,16 @@ class ColorPalette extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Hct hct = Hct.fromInt(color.value);
+    final Hct hct = Hct.fromInt(color.toARGB32());
     final primary = Color(Hct.from(hct.hue, 20.0, 90.0).toInt());
     final tertiary = Color(Hct.from(hct.hue + 50, 20.0, 85.0).toInt());
     final primaryContainer = Color(Hct.from(hct.hue, 30.0, 50.0).toInt());
-    final checkbox = Color(Hct.from(hct.hue, 30.0, 40.0).toInt());
     Widget coloredBox(Color color) => Expanded(
-          child: ColoredBox(
-            color: color,
-            child: const SizedBox.expand(),
-          ),
-        );
+      child: ColoredBox(
+        color: color,
+        child: const SizedBox.expand(),
+      ),
+    );
     Widget child = ClipOval(
       child: Column(
         children: [
@@ -50,7 +50,7 @@ class ColorPalette extends StatelessWidget {
             width: 23,
             height: 23,
             decoration: BoxDecoration(
-              color: checkbox,
+              color: Color(Hct.from(hct.hue, 30.0, 40.0).toInt()),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -68,7 +68,7 @@ class ColorPalette extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: theme.colorScheme.onInverseSurface,
-        borderRadius: const BorderRadius.all(Radius.circular(10)),
+        borderRadius: StyleString.mdRadius,
       ),
       child: child,
     );

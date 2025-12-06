@@ -20,57 +20,58 @@ class _RankPageState extends State<RankPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     super.build(context);
+    final theme = Theme.of(context);
     return Row(
       children: [
         SizedBox(
           width: 64,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.paddingOf(context).bottom + 80,
-            ),
-            child: Column(
-              children: List.generate(
-                RankType.values.length,
-                (index) => Obx(
-                  () => IntrinsicHeight(
-                    child: InkWell(
-                      onTap: () {
-                        if (_rankController.tabIndex.value != index) {
-                          _rankController.tabIndex.value = index;
-                          _rankController.tabController.animateTo(index);
-                        } else {
-                          _rankController.animateToTop();
-                        }
-                      },
-                      child: ColoredBox(
-                        color: index == _rankController.tabIndex.value
-                            ? theme.colorScheme.onInverseSurface
-                            : theme.colorScheme.surface,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 100),
+            children: List.generate(
+              RankType.values.length,
+              (index) => IntrinsicHeight(
+                child: Obx(
+                  () {
+                    final isCurr = index == _rankController.tabIndex.value;
+                    return Material(
+                      color: isCurr
+                          ? theme.colorScheme.onInverseSurface
+                          : theme.colorScheme.surface,
+                      child: InkWell(
+                        onTap: () {
+                          if (isCurr) {
+                            _rankController.animateToTop();
+                          } else {
+                            _rankController
+                              ..tabIndex.value = index
+                              ..tabController.animateTo(index);
+                          }
+                        },
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              height: double.infinity,
-                              width: 3,
-                              color: index == _rankController.tabIndex.value
-                                  ? theme.colorScheme.primary
-                                  : Colors.transparent,
-                            ),
+                            if (isCurr)
+                              Container(
+                                height: double.infinity,
+                                width: 3,
+                                color: theme.colorScheme.primary,
+                              )
+                            else
+                              const SizedBox(width: 3),
                             Expanded(
                               flex: 1,
                               child: Container(
                                 alignment: Alignment.center,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 7),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 7,
+                                ),
                                 child: Text(
                                   RankType.values[index].label,
                                   style: TextStyle(
-                                    color:
-                                        index == _rankController.tabIndex.value
-                                            ? theme.colorScheme.primary
-                                            : theme.colorScheme.onSurface,
+                                    color: isCurr
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface,
                                     fontSize: 15,
                                   ),
                                   maxLines: 1,
@@ -81,8 +82,8 @@ class _RankPageState extends State<RankPage>
                           ],
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -93,10 +94,12 @@ class _RankPageState extends State<RankPage>
             physics: const NeverScrollableScrollPhysics(),
             controller: _rankController.tabController,
             children: RankType.values
-                .map((item) => ZonePage(
-                      rid: item.rid,
-                      seasonType: item.seasonType,
-                    ))
+                .map(
+                  (item) => ZonePage(
+                    rid: item.rid,
+                    seasonType: item.seasonType,
+                  ),
+                )
                 .toList(),
           ),
         ),

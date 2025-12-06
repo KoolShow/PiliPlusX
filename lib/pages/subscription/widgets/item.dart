@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models_new/sub/sub/list.dart';
+import 'package:PiliPlus/pages/subscription_detail/view.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -25,71 +26,72 @@ class SubItem extends StatelessWidget {
       21 => '合集',
       _ => '其它(${item.type})',
     };
-    return InkWell(
-      onTap: () {
-        if (item.state == 1) {
-          SmartDialog.showToast('该$type已失效');
-          return;
-        }
-        if (item.type == 11) {
-          Get.toNamed(
-            '/favDetail',
-            parameters: {
-              'mediaId': item.id!.toString(),
-              'heroTag': heroTag,
-            },
-          );
-        } else {
-          Get.toNamed(
-            '/subDetail',
-            arguments: item,
-            parameters: {
-              'heroTag': heroTag,
-              'id': item.id.toString(),
-            },
-          );
-        }
-      },
-      onLongPress: () => imageSaveDialog(
-        title: item.title,
-        cover: item.cover,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: StyleString.aspectRatio,
-              child: LayoutBuilder(
-                builder: (context, boxConstraints) {
-                  double maxWidth = boxConstraints.maxWidth;
-                  double maxHeight = boxConstraints.maxHeight;
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Hero(
-                        tag: heroTag,
-                        child: NetworkImgLayer(
-                          src: item.cover,
-                          width: maxWidth,
-                          height: maxHeight,
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () {
+          if (item.state == 1) {
+            SmartDialog.showToast('该$type已失效');
+            return;
+          }
+          if (item.type == 11) {
+            Get.toNamed(
+              '/favDetail',
+              parameters: {
+                'mediaId': item.id!.toString(),
+                'heroTag': heroTag,
+              },
+            );
+          } else {
+            SubDetailPage.toSubDetailPage(
+              item.id!,
+              heroTag: heroTag,
+              subInfo: item,
+            );
+          }
+        },
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: StyleString.aspectRatio,
+                child: LayoutBuilder(
+                  builder: (context, boxConstraints) {
+                    double maxWidth = boxConstraints.maxWidth;
+                    double maxHeight = boxConstraints.maxHeight;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Hero(
+                          tag: heroTag,
+                          child: NetworkImgLayer(
+                            src: item.cover,
+                            width: maxWidth,
+                            height: maxHeight,
+                          ),
                         ),
-                      ),
-                      PBadge(
-                        right: 6,
-                        top: 6,
-                        text: type,
-                      )
-                    ],
-                  );
-                },
+                        PBadge(
+                          right: 6,
+                          top: 6,
+                          text: type,
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            content(context),
-          ],
+              const SizedBox(width: 10),
+              content(context),
+            ],
+          ),
         ),
       ),
     );
@@ -106,21 +108,27 @@ class SubItem extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Column(
-            spacing: 4,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item.title!,
-                textAlign: TextAlign.start,
-                style: const TextStyle(
-                  letterSpacing: 0.3,
+              Expanded(
+                child: Text(
+                  item.title!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.start,
+                  style: const TextStyle(
+                    letterSpacing: 0.3,
+                  ),
                 ),
               ),
               Text(
                 'UP主: ${item.upper!.name!}',
                 textAlign: TextAlign.start,
                 style: style,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
+              const SizedBox(height: 4),
               Text(
                 '${item.mediaCount}个视频',
                 textAlign: TextAlign.start,

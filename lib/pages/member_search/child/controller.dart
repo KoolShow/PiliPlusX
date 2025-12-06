@@ -41,6 +41,9 @@ class MemberSearchChildController extends CommonListController {
       case MemberSearchType.dynamic:
         DynamicsDataModel data = response;
         offset = data.offset;
+        if (data.hasMore == false) {
+          isEnd = true;
+        }
         controller.counts[searchType.index] = data.total ?? 0;
         return data.items;
     }
@@ -56,17 +59,17 @@ class MemberSearchChildController extends CommonListController {
   Future<LoadingState> customGetData() {
     return switch (searchType) {
       MemberSearchType.archive => MemberHttp.searchArchive(
-          mid: controller.mid,
-          pn: page,
-          keyword: controller.editingController.text,
-          order: 'pubdate',
-        ),
+        mid: controller.mid,
+        pn: page,
+        keyword: controller.editingController.text,
+        order: 'pubdate',
+      ),
       MemberSearchType.dynamic => MemberHttp.dynSearch(
-          mid: controller.mid,
-          pn: page,
-          offset: offset ?? '',
-          keyword: controller.editingController.text,
-        ),
+        mid: controller.mid,
+        pn: page,
+        offset: offset ?? '',
+        keyword: controller.editingController.text,
+      ),
     };
   }
 }

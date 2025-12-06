@@ -1,64 +1,111 @@
+import 'package:PiliPlus/http/fav.dart';
+import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/models/common/theme/theme_type.dart';
 import 'package:PiliPlus/models/user/info.dart';
 import 'package:PiliPlus/models/user/stat.dart';
+import 'package:PiliPlus/models_new/fav/fav_folder/data.dart';
+import 'package:PiliPlus/pages/common/common_data_controller.dart';
 import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/login_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
-class MineController extends GetxController {
+class MineController
+    extends CommonDataController<FavFolderData, FavFolderData> {
+  AccountService accountService = Get.find<AccountService>();
+
+  int? favFolderCount;
+
   // 用户信息 头像、昵称、lv
   Rx<UserInfoData> userInfo = UserInfoData().obs;
   // 用户状态 动态、关注、粉丝
   Rx<UserStat> userStat = UserStat().obs;
 
-  AccountService accountService = Get.find<AccountService>();
+  Rx<ThemeType> themeType = Pref.themeType.obs;
 
-  Rx<ThemeType> themeType = ThemeType.system.obs;
-  Box get setting => GStorage.setting;
-  static RxBool anonymity = (Accounts.account.isNotEmpty &&
-          !Accounts.get(AccountType.heartbeat).isLogin)
-      .obs;
   ThemeType get nextThemeType =>
       ThemeType.values[(themeType.value.index + 1) % ThemeType.values.length];
+
+  static RxBool anonymity =
+      (Accounts.account.isNotEmpty && !Accounts.heartbeat.isLogin).obs;
+
+  late final list =
+      <({IconData icon, double size, String title, VoidCallback onTap})>[
+        (
+          size: 23,
+          icon: MdiIcons.folderDownloadOutline,
+          title: '离线缓存',
+          onTap: () => Get.toNamed('/download'),
+        ),
+        (
+          size: 23,
+          icon: Icons.history,
+          title: '观看记录',
+          onTap: () {
+            if (isLogin) {
+              Get.toNamed('/history');
+            }
+          },
+        ),
+        (
+          size: 20,
+          icon: Icons.subscriptions_outlined,
+          title: '我的订阅',
+          onTap: () {
+            if (isLogin) {
+              Get.toNamed('/subscription');
+            }
+          },
+        ),
+        (
+          size: 22,
+          icon: Icons.watch_later_outlined,
+          title: '稍后再看',
+          onTap: () {
+            if (isLogin) {
+              Get.toNamed('/later');
+            }
+          },
+        ),
+      ];
 
   @override
   void onInit() {
     super.onInit();
-    UserInfoData? userInfoCache = GStorage.userInfo.get('userInfoCache');
+    UserInfoData? userInfoCache = Pref.userInfoCache;
     if (userInfoCache != null) {
       userInfo.value = userInfoCache;
+      queryData();
+      queryUserInfo();
     }
   }
 
-  void onLogin([bool longPress = false]) {
-    if (!accountService.isLogin.value || longPress) {
-      Get.toNamed('/loginPage', preventDuplicates: false);
-    } else {
-      int mid = userInfo.value.mid!;
-      String face = userInfo.value.face!;
-      Get.toNamed('/member?mid=$mid',
-          arguments: {'face': face}, preventDuplicates: false);
+  bool get isLogin {
+    if (!accountService.isLogin.value) {
+      // SmartDialog.showToast('账号未登录');
+      return false;
     }
+    return true;
   }
 
   Future<void> queryUserInfo() async {
-    if (!accountService.isLogin.value) {
-      return;
-    }
     var res = await UserHttp.userInfo();
-    if (res['status']) {
-      UserInfoData data = res['data'];
+    if (res.isSuccess) {
+      UserInfoData data = res.data;
       if (data.isLogin == true) {
         userInfo.value = data;
-        GStorage.userInfo.put('userInfoCache', data);
+        if (data != Pref.userInfoCache) {
+          GStorage.userInfo.put('userInfoCache', data);
+        }
         accountService
           ..mid = data.mid!
           ..name.value = data.uname!
@@ -69,8 +116,9 @@ class MineController extends GetxController {
         return;
       }
     } else {
-      SmartDialog.showToast(res['msg']);
-      if (res['msg'] == '账号未登录') {
+      final errMsg = res.toString();
+      SmartDialog.showToast(errMsg);
+      if (errMsg == '账号未登录') {
         LoginUtils.onLogoutMain();
         return;
       }
@@ -85,13 +133,30 @@ class MineController extends GetxController {
     }
   }
 
-  static void onChangeAnonymity(BuildContext context) {
+  @override
+  bool customHandleResponse(bool isRefresh, Success<FavFolderData> response) {
+    favFolderCount = response.response.count;
+    loadingState.value = response;
+    return true;
+  }
+
+  @override
+  Future<LoadingState<FavFolderData>> customGetData() {
+    return FavHttp.userfavFolder(
+      pn: 1,
+      ps: 20,
+      mid: accountService.mid,
+    );
+  }
+
+  static void onChangeAnonymity() {
     if (Accounts.account.isEmpty) {
       SmartDialog.showToast('请先登录');
       return;
     }
-    anonymity.value = !anonymity.value;
-    if (anonymity.value) {
+    final newVal = !anonymity.value;
+    anonymity.value = newVal;
+    if (newVal) {
       SmartDialog.dismiss();
       SmartDialog.show<bool>(
         clickMaskDismiss: false,
@@ -100,8 +165,9 @@ class MineController extends GetxController {
         alignment: Alignment.bottomCenter,
         builder: (context) {
           final theme = Theme.of(context);
-          final style =
-              TextStyle(color: theme.colorScheme.onSecondaryContainer);
+          final style = TextStyle(
+            color: theme.colorScheme.onSecondaryContainer,
+          );
           return ColoredBox(
             color: theme.colorScheme.secondaryContainer,
             child: Padding(
@@ -109,7 +175,7 @@ class MineController extends GetxController {
                 top: 15,
                 left: 20,
                 right: 20,
-                bottom: MediaQuery.paddingOf(context).bottom + 15,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 15,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -119,7 +185,7 @@ class MineController extends GetxController {
                     children: <Widget>[
                       const Icon(MdiIcons.incognito, size: 20),
                       const SizedBox(width: 10),
-                      Text('已进入无痕模式', style: theme.textTheme.titleMedium)
+                      Text('已进入无痕模式', style: theme.textTheme.titleMedium),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -161,7 +227,8 @@ class MineController extends GetxController {
         }
         res == true
             ? Accounts.set(AccountType.heartbeat, AnonymousAccount())
-            : Accounts.accountMode[AccountType.heartbeat] = AnonymousAccount();
+            : Accounts.accountMode[AccountType.heartbeat.index] =
+                  AnonymousAccount();
       });
     } else {
       Accounts.set(AccountType.heartbeat, Accounts.main);
@@ -180,10 +247,9 @@ class MineController extends GetxController {
                 top: 15,
                 left: 20,
                 right: 20,
-                bottom: MediaQuery.paddingOf(context).bottom + 15,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 15,
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   const Icon(MdiIcons.incognitoOff, size: 20),
                   const SizedBox(width: 10),
@@ -198,36 +264,33 @@ class MineController extends GetxController {
   }
 
   void onChangeTheme() {
-    themeType.value = nextThemeType;
-    try {
-      Get.find<MineController>().themeType.value = themeType.value;
-    } catch (_) {}
-    setting.put(SettingBoxKey.themeMode, themeType.value.code);
-    Get.changeThemeMode(themeType.value.toThemeMode);
+    final newVal = nextThemeType;
+    themeType.value = newVal;
+    GStorage.setting.put(SettingBoxKey.themeMode, newVal.index);
+    Get.changeThemeMode(newVal.toThemeMode);
   }
 
-  void pushFollow() {
-    if (!accountService.isLogin.value) {
-      SmartDialog.showToast('账号未登录');
-      return;
+  void push(String name) {
+    late final mid = userInfo.value.mid;
+    if (isLogin && mid != null) {
+      Get.toNamed('/$name?mid=$mid');
     }
-    Get.toNamed('/follow?mid=${userInfo.value.mid}', preventDuplicates: false);
   }
 
-  void pushFans() {
-    if (!accountService.isLogin.value) {
-      SmartDialog.showToast('账号未登录');
-      return;
+  void onLogin([bool longPress = false]) {
+    if (!accountService.isLogin.value || longPress) {
+      Get.toNamed('/loginPage');
+    } else {
+      Get.toNamed('/member?mid=${userInfo.value.mid}');
     }
-    Get.toNamed('/fan?mid=${userInfo.value.mid}', preventDuplicates: false);
   }
 
-  void pushDynamic() {
+  @override
+  Future<void> onRefresh() {
     if (!accountService.isLogin.value) {
-      SmartDialog.showToast('账号未登录');
-      return;
+      return Future.value();
     }
-    Get.toNamed('/memberDynamics?mid=${userInfo.value.mid}',
-        preventDuplicates: false);
+    queryUserInfo();
+    return super.onRefresh();
   }
 }

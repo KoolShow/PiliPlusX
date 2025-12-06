@@ -4,7 +4,7 @@ import 'package:PiliPlus/grpc/im.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/msg/msgfeed_unread.dart';
 import 'package:PiliPlus/pages/common/common_whisper_controller.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -15,7 +15,7 @@ class WhisperController extends CommonWhisperController<SessionMainReply> {
   SessionPageType sessionPageType = SessionPageType.SESSION_PAGE_TYPE_HOME;
 
   late final List<({bool enabled, IconData icon, String name, String route})>
-      msgFeedTopItems;
+  msgFeedTopItems;
   late final RxList<int> unreadCounts;
 
   PbMap<int, Offset>? offset;
@@ -26,8 +26,6 @@ class WhisperController extends CommonWhisperController<SessionMainReply> {
   @override
   void onInit() {
     super.onInit();
-    final disableLikeMsg =
-        GStorage.setting.get(SettingBoxKey.disableLikeMsg, defaultValue: false);
     msgFeedTopItems = [
       const (
         name: "回复我的",
@@ -45,7 +43,7 @@ class WhisperController extends CommonWhisperController<SessionMainReply> {
         name: "收到的赞",
         icon: Icons.favorite_border_outlined,
         route: "/likeMe",
-        enabled: !disableLikeMsg,
+        enabled: !Pref.disableLikeMsg,
       ),
       const (
         name: "系统通知",
@@ -81,7 +79,9 @@ class WhisperController extends CommonWhisperController<SessionMainReply> {
 
   @override
   bool customHandleResponse(
-      bool isRefresh, Success<SessionMainReply> response) {
+    bool isRefresh,
+    Success<SessionMainReply> response,
+  ) {
     if (isRefresh) {
       threeDotItems.value = response.response.threeDotItems;
       outsideItem.value = response.response.outsideItem;

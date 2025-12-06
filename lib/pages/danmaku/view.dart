@@ -1,12 +1,11 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:PiliPlus/pages/danmaku/controller.dart';
+import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/utils/danmaku_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -15,13 +14,17 @@ import 'package:get/get.dart';
 class PlDanmaku extends StatefulWidget {
   final int cid;
   final PlPlayerController playerController;
-  final bool? isPipMode;
+  final bool isPipMode;
+  final bool isFullScreen;
+  final bool isFileSource;
 
   const PlDanmaku({
     super.key,
     required this.cid,
     required this.playerController,
-    this.isPipMode,
+    this.isPipMode = false,
+    required this.isFullScreen,
+    required this.isFileSource,
   });
 
   @override
@@ -31,45 +34,52 @@ class PlDanmaku extends StatefulWidget {
 class _PlDanmakuState extends State<PlDanmaku> {
   PlPlayerController get playerController => widget.playerController;
 
-  late PlDanmakuController _plDanmakuController;
-  DanmakuController? _controller;
-  late bool enableShowDanmaku;
+  late final PlDanmakuController _plDanmakuController;
+  DanmakuController<DanmakuExtra>? _controller;
   int latestAddedPosition = -1;
-  bool? _isFullScreen;
-  StreamSubscription? _listenerFS;
 
   @override
   void initState() {
     super.initState();
-    enableShowDanmaku = GStorage.setting
-        .get(SettingBoxKey.enableShowDanmaku, defaultValue: true);
     _plDanmakuController = PlDanmakuController(
       widget.cid,
       playerController,
+      widget.isFileSource,
     );
-    if (enableShowDanmaku || playerController.isOpenDanmu.value) {
-      _plDanmakuController.queryDanmaku(
-        _plDanmakuController.calcSegment(
-          playerController.position.value.inMilliseconds,
-        ),
-      );
+    if (playerController.enableShowDanmaku.value) {
+      if (widget.isFileSource) {
+        _plDanmakuController.initFileDmIfNeeded();
+      } else {
+        _plDanmakuController.queryDanmaku(
+          PlDanmakuController.calcSegment(
+            playerController.position.value.inMilliseconds,
+          ),
+        );
+      }
     }
     playerController
       ..addStatusLister(playerListener)
       ..addPositionListener(videoPositionListen);
-    _listenerFS = playerController.isFullScreen.listen((isFullScreen) {
-      if (isFullScreen != _isFullScreen) {
-        _isFullScreen = isFullScreen;
-        if (_controller != null) {
-          _controller!.updateOption(
-            _controller!.option.copyWith(
-              fontSize: _getFontSize(isFullScreen),
-            ),
-          );
-        }
-      }
-    });
   }
+
+  @override
+  void didUpdateWidget(PlDanmaku oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isPipMode != widget.isPipMode ||
+        oldWidget.isFullScreen != widget.isFullScreen) {
+      _updateFontSize();
+    }
+  }
+
+  void _updateFontSize() {
+    _controller?.updateOption(
+      _controller!.option.copyWith(fontSize: _fontSize),
+    );
+  }
+
+  double get _fontSize => !widget.isFullScreen || widget.isPipMode
+      ? 15 * playerController.danmakuFontScale
+      : 15 * playerController.danmakuFontScaleFS;
 
   // 播放器状态监听
   void playerListener(PlayerStatus? status) {
@@ -80,20 +90,17 @@ class _PlDanmakuState extends State<PlDanmaku> {
     }
   }
 
+  @pragma('vm:notify-debugger-on-exception')
   void videoPositionListen(Duration position) {
-    if (!playerController.isOpenDanmu.value) {
+    if (_controller == null || !playerController.enableShowDanmaku.value) {
       return;
     }
 
-    if (_controller == null) {
+    if (!playerController.showDanmaku && !widget.isPipMode) {
       return;
     }
 
-    if (!playerController.showDanmaku && widget.isPipMode != true) {
-      return;
-    }
-
-    if (playerController.playerStatus.status.value != PlayerStatus.playing) {
+    if (!playerController.playerStatus.playing) {
       return;
     }
 
@@ -104,9 +111,10 @@ class _PlDanmakuState extends State<PlDanmaku> {
     }
     latestAddedPosition = currentPosition;
 
-    List<DanmakuElem>? currentDanmakuList =
-        _plDanmakuController.getCurrentDanmaku(currentPosition);
+    List<DanmakuElem>? currentDanmakuList = _plDanmakuController
+        .getCurrentDanmaku(currentPosition);
     if (currentDanmakuList != null) {
+      final blockColorful = playerController.blockColorful;
       for (DanmakuElem e in currentDanmakuList) {
         if (e.mode == 7) {
           try {
@@ -115,6 +123,11 @@ class _PlDanmakuState extends State<PlDanmaku> {
                 DmUtils.decimalToColor(e.color),
                 e.fontsize.toDouble(),
                 jsonDecode(e.content.replaceAll('\n', '\\n')),
+                extra: VideoDanmaku(
+                  id: e.id.toInt(),
+                  mid: e.midHash,
+                  like: e.like.toInt(),
+                ),
               ),
             );
           } catch (_) {}
@@ -122,16 +135,20 @@ class _PlDanmakuState extends State<PlDanmaku> {
           _controller!.addDanmaku(
             DanmakuContentItem(
               e.content,
-              color: playerController.blockTypes.contains(6)
+              color: blockColorful
                   ? Colors.white
                   : DmUtils.decimalToColor(e.color),
               type: DmUtils.getPosition(e.mode),
-              isColorful: playerController.showVipDanmaku &&
-                      e.colorful == DmColorfulType.VipGradualColor
-                  ? true
-                  : null,
-              count: e.hasCount() ? e.count : null,
+              isColorful:
+                  playerController.showVipDanmaku &&
+                  e.colorful == DmColorfulType.VipGradualColor,
+              count: e.count > 1 ? e.count : null,
               selfSend: e.isSelf,
+              extra: VideoDanmaku(
+                id: e.id.toInt(),
+                mid: e.midHash,
+                like: e.like.toInt(),
+              ),
             ),
           );
         }
@@ -141,7 +158,6 @@ class _PlDanmakuState extends State<PlDanmaku> {
 
   @override
   void dispose() {
-    _listenerFS?.cancel();
     playerController
       ..removePositionListener(videoPositionListen)
       ..removeStatusLister(playerListener);
@@ -149,41 +165,37 @@ class _PlDanmakuState extends State<PlDanmaku> {
     super.dispose();
   }
 
-  double _getFontSize(bool isFullScreen) =>
-      !isFullScreen || widget.isPipMode == true
-          ? 15 * playerController.fontSize
-          : 15 * playerController.fontSizeFS;
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, box) {
-      // double initDuration = box.maxWidth / 12;
-      return Obx(
-        () => AnimatedOpacity(
-          opacity: playerController.isOpenDanmu.value ? 1 : 0,
-          duration: const Duration(milliseconds: 100),
-          child: DanmakuScreen(
-            createdController: (DanmakuController e) {
-              playerController.danmakuController = _controller = e;
-            },
-            option: DanmakuOption(
-              fontSize: _getFontSize(playerController.isFullScreen.value),
-              fontWeight: playerController.fontWeight,
-              area: playerController.showArea,
-              opacity: playerController.opacity,
-              hideTop: playerController.blockTypes.contains(5),
-              hideScroll: playerController.blockTypes.contains(2),
-              hideBottom: playerController.blockTypes.contains(4),
-              duration: playerController.danmakuDuration /
-                  playerController.playbackSpeed,
-              staticDuration: playerController.danmakuStaticDuration /
-                  playerController.playbackSpeed,
-              strokeWidth: playerController.strokeWidth,
-              lineHeight: playerController.danmakuLineHeight,
-            ),
+    return Obx(
+      () => AnimatedOpacity(
+        opacity: playerController.enableShowDanmaku.value
+            ? playerController.danmakuOpacity.value
+            : 0,
+        duration: const Duration(milliseconds: 100),
+        child: DanmakuScreen<DanmakuExtra>(
+          createdController: (e) {
+            playerController.danmakuController = _controller = e;
+          },
+          option: DanmakuOption(
+            fontSize: _fontSize,
+            fontWeight: playerController.danmakuFontWeight,
+            area: playerController.showArea,
+            hideTop: playerController.blockTypes.contains(5),
+            hideScroll: playerController.blockTypes.contains(2),
+            hideBottom: playerController.blockTypes.contains(4),
+            hideSpecial: playerController.blockTypes.contains(7),
+            duration:
+                playerController.danmakuDuration /
+                playerController.playbackSpeed,
+            staticDuration:
+                playerController.danmakuStaticDuration /
+                playerController.playbackSpeed,
+            strokeWidth: playerController.danmakuStrokeWidth,
+            lineHeight: playerController.danmakuLineHeight,
           ),
         ),
-      );
-    });
+      ),
+    );
   }
 }

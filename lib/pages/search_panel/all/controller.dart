@@ -1,9 +1,10 @@
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/search.dart';
-import 'package:PiliPlus/models/common/search_type.dart';
+import 'package:PiliPlus/models/common/search/search_type.dart';
 import 'package:PiliPlus/models/search/result.dart';
 import 'package:PiliPlus/pages/search_panel/controller.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 
 class SearchAllController
     extends SearchPanelController<SearchAllData, dynamic> {
@@ -13,7 +14,7 @@ class SearchAllController
     required super.tag,
   });
 
-  bool? hasJump2Video;
+  late bool hasJump2Video = false;
 
   @override
   void onInit() {
@@ -30,7 +31,7 @@ class SearchAllController
   bool customHandleResponse(bool isRefresh, Success response) {
     searchResultController?.count[searchType.index] =
         response.response.numResults ?? 0;
-    if (searchType == SearchType.video && hasJump2Video != true && isRefresh) {
+    if (searchType == SearchType.video && !hasJump2Video && isRefresh) {
       hasJump2Video = true;
       onPushDetail(response.response.list);
     }
@@ -39,17 +40,17 @@ class SearchAllController
 
   @override
   Future<LoadingState<SearchAllData>> customGetData() => SearchHttp.searchAll(
-        keyword: keyword,
-        page: page,
-        order: order.value,
-        duration: searchType == SearchType.video ? duration.value : null,
-        tids: tids,
-        orderSort: orderSort,
-        userType: userType,
-        categoryId: categoryId,
-        pubBegin: pubBegin,
-        pubEnd: pubEnd,
-      );
+    keyword: keyword,
+    page: page,
+    order: order,
+    duration: null,
+    tids: videoZoneType?.tids,
+    orderSort: userOrderType?.value.orderSort,
+    userType: userType?.value.index,
+    categoryId: articleZoneType?.value.categoryId,
+    pubBegin: pubBegin,
+    pubEnd: pubEnd,
+  );
 
   void onPushDetail(dynamic resultList) {
     try {
@@ -61,15 +62,14 @@ class SearchAllController
   }
 
   void jump2Video() {
-    if (RegExp(r'^av\d+$', caseSensitive: false).hasMatch(keyword)) {
+    if (IdUtils.avRegexExact.hasMatch(keyword)) {
       hasJump2Video = true;
       PiliScheme.videoPush(
         int.parse(keyword.substring(2)),
         null,
         showDialog: false,
       );
-    } else if (RegExp(r'^bv[a-z\d]{10}$', caseSensitive: false)
-        .hasMatch(keyword)) {
+    } else if (IdUtils.bvRegexExact.hasMatch(keyword)) {
       hasJump2Video = true;
       PiliScheme.videoPush(null, keyword, showDialog: false);
     }

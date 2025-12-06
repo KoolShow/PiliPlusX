@@ -5,15 +5,19 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/user/info.dart';
 import 'package:PiliPlus/models/user/stat.dart';
 import 'package:PiliPlus/models_new/coin_log/data.dart';
+import 'package:PiliPlus/models_new/follow/data.dart';
 import 'package:PiliPlus/models_new/history/data.dart';
 import 'package:PiliPlus/models_new/later/data.dart';
+import 'package:PiliPlus/models_new/login_log/data.dart';
 import 'package:PiliPlus/models_new/media_list/data.dart';
 import 'package:PiliPlus/models_new/space_setting/data.dart';
 import 'package:PiliPlus/models_new/sub/sub/data.dart';
-import 'package:PiliPlus/models_new/sub/sub/list.dart';
+import 'package:PiliPlus/models_new/user_real_name/data.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
+import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
+import 'package:PiliPlus/utils/app_sign.dart';
 import 'package:PiliPlus/utils/global_data.dart';
-import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -28,14 +32,14 @@ class UserHttp {
     }
   }
 
-  static Future<dynamic> userInfo() async {
+  static Future<LoadingState<UserInfoData>> userInfo() async {
     var res = await Request().get(Api.userInfo);
     if (res.data['code'] == 0) {
       UserInfoData data = UserInfoData.fromJson(res.data['data']);
       GlobalData().coins = data.money;
-      return {'status': true, 'data': data};
+      return Success(data);
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      return Error(res.data['message']);
     }
   }
 
@@ -80,13 +84,18 @@ class UserHttp {
     required String type,
     int? max,
     int? viewAt,
+    Account? account,
   }) async {
-    var res = await Request().get(Api.historyList, queryParameters: {
-      'type': type,
-      'ps': 20,
-      'max': max ?? 0,
-      'view_at': viewAt ?? 0,
-    });
+    var res = await Request().get(
+      Api.historyList,
+      queryParameters: {
+        'type': type,
+        'ps': 20,
+        'max': max ?? 0,
+        'view_at': viewAt ?? 0,
+      },
+      options: Options(extra: {'account': account ?? Accounts.history}),
+    );
     if (res.data['code'] == 0) {
       return Success(HistoryData.fromJson(res.data['data']));
     } else {
@@ -95,22 +104,30 @@ class UserHttp {
   }
 
   // 暂停观看历史
-  static Future pauseHistory(bool switchStatus) async {
+  static Future pauseHistory(bool switchStatus, {Account? account}) async {
     // 暂停switchStatus传true 否则false
+    account ??= Accounts.history;
     var res = await Request().post(
       Api.pauseHistory,
-      queryParameters: {
+      data: {
         'switch': switchStatus,
         'jsonp': 'jsonp',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     return res;
   }
 
   // 观看历史暂停状态
-  static Future historyStatus() async {
-    var res = await Request().get(Api.historyStatus);
+  static Future historyStatus({Account? account}) async {
+    var res = await Request().get(
+      Api.historyStatus,
+      options: Options(extra: {'account': account ?? Accounts.history}),
+    );
     if (res.data['code'] == 0) {
       return {'status': true, 'data': res.data['data']};
     } else {
@@ -119,13 +136,18 @@ class UserHttp {
   }
 
   // 清空历史记录
-  static Future clearHistory() async {
+  static Future clearHistory({Account? account}) async {
+    account ??= Accounts.history;
     var res = await Request().post(
       Api.clearHistory,
-      queryParameters: {
+      data: {
         'jsonp': 'jsonp',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     return res;
   }
@@ -134,11 +156,12 @@ class UserHttp {
   static Future toViewLater({String? bvid, dynamic aid}) async {
     var res = await Request().post(
       Api.toViewLater,
-      queryParameters: {
-        if (aid != null) 'aid': aid,
-        if (bvid != null) 'bvid': bvid,
+      data: {
+        'aid': ?aid,
+        'bvid': ?bvid,
         'csrf': Accounts.main.csrf,
       },
+      options: Options(contentType: Headers.formUrlEncodedContentType),
     );
     if (res.data['code'] == 0) {
       return {'status': true, 'msg': 'yeah！稍后再看'};
@@ -148,10 +171,10 @@ class UserHttp {
   }
 
   // 移除已观看
-  static Future toViewDel({required List<int?> aids}) async {
+  static Future toViewDel({required String aids}) async {
     final Map<String, dynamic> params = {
       'csrf': Accounts.main.csrf,
-      'resources': aids.join(',')
+      'resources': aids,
     };
     var res = await Request().post(
       Api.toViewDel,
@@ -188,10 +211,11 @@ class UserHttp {
   static Future toViewClear([int? cleanType]) async {
     var res = await Request().post(
       Api.toViewClear,
-      queryParameters: {
-        if (cleanType != null) 'clean_type': cleanType,
+      data: {
+        'clean_type': ?cleanType,
         'csrf': Accounts.main.csrf,
       },
+      options: Options(contentType: Headers.formUrlEncodedContentType),
     );
     if (res.data['code'] == 0) {
       return {'status': true, 'msg': '操作完成'};
@@ -201,15 +225,17 @@ class UserHttp {
   }
 
   // 删除历史记录
-  static Future delHistory(List<String> kidList) async {
+  static Future delHistory(String kid, {Account? account}) async {
+    account ??= Accounts.history;
     var res = await Request().post(
       Api.delHistory,
       data: {
-        'kid': kidList.join(','),
+        'kid': kid,
         'jsonp': 'jsonp',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
@@ -235,8 +261,11 @@ class UserHttp {
   }
 
   // 搜索历史记录
-  static Future<LoadingState<HistoryData>> searchHistory(
-      {required int pn, required String keyword}) async {
+  static Future<LoadingState<HistoryData>> searchHistory({
+    required int pn,
+    required String keyword,
+    Account? account,
+  }) async {
     var res = await Request().get(
       Api.searchHistory,
       queryParameters: {
@@ -244,6 +273,7 @@ class UserHttp {
         'keyword': keyword,
         'business': 'all',
       },
+      options: Options(extra: {'account': account ?? Accounts.history}),
     );
     if (res.data['code'] == 0) {
       return Success(HistoryData.fromJson(res.data['data']));
@@ -253,7 +283,7 @@ class UserHttp {
   }
 
   // 我的订阅
-  static Future<LoadingState<List<SubItemModel>?>> userSubFolder({
+  static Future<LoadingState<SubData>> userSubFolder({
     required int mid,
     required int pn,
     required int ps,
@@ -268,22 +298,28 @@ class UserHttp {
       },
     );
     if (res.data['code'] == 0 && res.data['data'] is Map) {
-      return Success(SubData.fromJson(res.data['data']).list);
+      return Success(SubData.fromJson(res.data['data']));
     } else {
       return Error(res.data['message']);
     }
   }
 
-  static Future<Map<String, dynamic>> videoTags({required String bvid}) async {
-    var res =
-        await Request().get(Api.videoTags, queryParameters: {'bvid': bvid});
+  static Future<LoadingState<List<VideoTagItem>?>> videoTags({
+    required String bvid,
+    Object? cid,
+  }) async {
+    var res = await Request().get(
+      Api.videoTags,
+      queryParameters: {'bvid': bvid, 'cid': ?cid},
+    );
     if (res.data['code'] == 0) {
-      List<VideoTagItem>? list = (res.data['data'] as List?)
-          ?.map((e) => VideoTagItem.fromJson(e))
-          .toList();
-      return {'status': true, 'data': list};
+      return Success(
+        (res.data['data'] as List?)
+            ?.map((e) => VideoTagItem.fromJson(e))
+            .toList(),
+      );
     } else {
-      return {'status': false};
+      return const Error(null);
     }
   }
 
@@ -305,8 +341,8 @@ class UserHttp {
         'mobi_app': 'web',
         'type': type,
         'biz_id': bizId,
-        if (oid != null) 'oid': oid,
-        if (otype != null) 'otype': otype, // ugc:2 // pgc: 24
+        'oid': ?oid,
+        'otype': ?otype, // ugc:2 // pgc: 24
         'ps': ps,
         'direction': direction,
         'desc': desc,
@@ -348,9 +384,7 @@ class UserHttp {
         "reason_type": reasonType,
         "reason_desc": reasonType == 0 ? reasonDesc : null,
       },
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-      ),
+      options: Options(contentType: Headers.formUrlEncodedContentType),
     );
     return res.data as Map;
   }
@@ -410,6 +444,99 @@ class UserHttp {
     );
     if (res.data['code'] == 0) {
       return Success(CoinLogData.fromJson(res.data['data']));
+    } else {
+      return Error(res.data['message']);
+    }
+  }
+
+  static Future<LoadingState<LoginLogData>> loginLog() async {
+    final res = await Request().get(
+      Api.loginLog,
+      queryParameters: {
+        'jsonp': 'jsonp',
+        'web_location': '333.33',
+      },
+    );
+    if (res.data['code'] == 0) {
+      return Success(LoginLogData.fromJson(res.data['data']));
+    } else {
+      return Error(res.data['message']);
+    }
+  }
+
+  static Future<LoadingState<CoinLogData>> expLog() async {
+    final res = await Request().get(
+      Api.expLog,
+      queryParameters: {
+        'jsonp': 'jsonp',
+        'web_location': '333.33',
+      },
+    );
+    if (res.data['code'] == 0) {
+      return Success(CoinLogData.fromJson(res.data['data']));
+    } else {
+      return Error(res.data['message']);
+    }
+  }
+
+  static Future<LoadingState<UserRealNameData>> getUserRealName(
+    Object mid,
+  ) async {
+    final params = {
+      'access_key': Accounts.main.accessKey,
+      'up_mid': mid,
+    };
+    AppSign.appSign(params);
+    final res = await Request().get(
+      Api.userRealName,
+      queryParameters: params,
+    );
+    if (res.data['code'] == 0) {
+      return Success(UserRealNameData.fromJson(res.data['data']));
+    } else {
+      return Error(res.data['message']);
+    }
+  }
+
+  static Future<LoadingState<FollowData>> followedUp({
+    required Object mid,
+    required int pn,
+  }) async {
+    final res = await Request().get(
+      Api.followedUp,
+      queryParameters: {
+        'csrf': Accounts.main.csrf,
+        'pn': pn,
+        'vmid': mid,
+        'web_location': 333.789,
+        'x-bili-device-req-json':
+            '{"platform":"web","device":"pc","spmid":"333.789"}',
+      },
+    );
+    if (res.data['code'] == 0) {
+      return Success(FollowData.fromJson(res.data['data']));
+    } else {
+      return Error(res.data['message']);
+    }
+  }
+
+  static Future<LoadingState<FollowData>> sameFollowing({
+    required Object mid,
+    int? pn,
+  }) async {
+    final res = await Request().get(
+      Api.sameFollowing,
+      queryParameters: {
+        'csrf': Accounts.main.csrf,
+        'pn': ?pn,
+        'vmid': mid,
+        'web_location': 333.789,
+        'x-bili-device-req-json':
+            '{"platform":"web","device":"pc","spmid":"333.789"}',
+      },
+    );
+    if (res.data['code'] == 0) {
+      return Success(FollowData.fromJson(res.data['data']));
     } else {
       return Error(res.data['message']);
     }

@@ -4,7 +4,7 @@ import 'package:PiliPlus/grpc/im.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/msg.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
@@ -24,14 +24,19 @@ abstract class CommonWhisperController<R>
     }
   }
 
-  Future<void> onSetTop(int index, bool isTop, SessionId sessionId) async {
+  Future<void> onSetTop(
+    Session item,
+    int index,
+    bool isTop,
+    SessionId sessionId,
+  ) async {
     var res = isTop
         ? await ImGrpc.unpinSession(sessionId: sessionId)
         : await ImGrpc.pinSession(sessionId: sessionId);
 
     if (res.isSuccess) {
       List<Session> list = loadingState.value.data!;
-      list[index].isPinned = isTop ? false : true;
+      item.isPinned = isTop ? false : true;
       if (!isTop) {
         list.insert(0, list.removeAt(index));
       }
@@ -42,16 +47,15 @@ abstract class CommonWhisperController<R>
     }
   }
 
-  Future<void> onSetMute(int index, bool isMuted, Int64 talkerUid) async {
+  Future<void> onSetMute(Session item, bool isMuted, Int64 talkerUid) async {
     var res = await MsgHttp.setMsgDnd(
       uid: Accounts.main.mid,
       setting: isMuted ? 0 : 1,
       dndUid: talkerUid,
     );
     if (res['status']) {
-      loadingState
-        ..value.data![index].isMuted = !isMuted
-        ..refresh();
+      item.isMuted = !isMuted;
+      loadingState.refresh();
       SmartDialog.showToast('操作成功');
     } else {
       SmartDialog.showToast(res['msg']);
@@ -63,8 +67,8 @@ abstract class CommonWhisperController<R>
     if (res.isSuccess) {
       if (loadingState.value.isSuccess) {
         List<Session>? list = loadingState.value.data;
-        if (list?.isNotEmpty == true) {
-          for (var item in list!) {
+        if (list != null && list.isNotEmpty) {
+          for (var item in list) {
             if (item.hasUnread()) {
               item.clearUnread();
             }

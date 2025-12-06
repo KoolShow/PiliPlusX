@@ -19,10 +19,7 @@ class HttpError extends StatelessWidget {
   Widget build(BuildContext context) {
     return isSliver
         ? SliverToBoxAdapter(child: content(context))
-        : SizedBox(
-            width: double.infinity,
-            child: content(context),
-          );
+        : SizedBox(width: double.infinity, child: content(context));
   }
 
   Widget content(BuildContext context) {
@@ -51,16 +48,16 @@ class HttpError extends StatelessWidget {
           FilledButton.tonal(
             onPressed: onReload,
             style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                return theme.colorScheme.primary.withAlpha(20);
-              }),
+              backgroundColor: WidgetStatePropertyAll(
+                theme.colorScheme.primary.withAlpha(20),
+              ),
             ),
             child: Text(
               btnText ?? '点击重试',
               style: TextStyle(color: theme.colorScheme.primary),
             ),
           ),
-        SizedBox(height: 40 + MediaQuery.paddingOf(context).bottom),
+        SizedBox(height: 40 + MediaQuery.viewPaddingOf(context).bottom),
       ],
     );
   }

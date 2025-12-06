@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
+import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/member/tags.dart';
 import 'package:PiliPlus/pages/follow/child/child_controller.dart';
@@ -16,20 +17,38 @@ class FollowPage extends StatefulWidget {
 
   @override
   State<FollowPage> createState() => _FollowPageState();
+
+  static void toFollowPage({dynamic mid, String? name}) {
+    if (mid == null) return;
+    Get.toNamed(
+      '/follow',
+      arguments: {
+        'mid': Utils.safeToInt(mid),
+        'name': name,
+      },
+    );
+  }
 }
 
 class _FollowPageState extends State<FollowPage> {
   final _tag = Utils.generateRandomString(8);
-  late final FollowController _followController =
-      Get.put(FollowController(), tag: _tag);
+  late final FollowController _followController = Get.put(
+    FollowController(),
+    tag: _tag,
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: Text(
-          _followController.isOwner ? '我的关注' : '${_followController.name}的关注',
-        ),
+        title: _followController.isOwner
+            ? const Text('我的关注')
+            : Obx(() {
+                final name = _followController.name.value;
+                if (name != null) return Text('$name的关注');
+                return const SizedBox.shrink();
+              }),
         actions: _followController.isOwner
             ? [
                 IconButton(
@@ -60,7 +79,7 @@ class _FollowPageState extends State<FollowPage> {
                           Text('黑名单管理'),
                         ],
                       ),
-                    )
+                    ),
                   ],
                 ),
                 const SizedBox(width: 6),
@@ -74,11 +93,11 @@ class _FollowPageState extends State<FollowPage> {
   }
 
   Widget _childPage([MemberTagItemModel? item]) => FollowChildPage(
-        tag: _tag,
-        controller: _followController,
-        mid: _followController.mid,
-        tagid: item?.tagid,
-      );
+    tag: _tag,
+    controller: _followController,
+    mid: _followController.mid,
+    tagid: item?.tagid,
+  );
 
   bool _isCustomTag(int? tagid) {
     return tagid != null && tagid != 0 && tagid != -10 && tagid != -2;
@@ -88,67 +107,67 @@ class _FollowPageState extends State<FollowPage> {
     return switch (loadingState) {
       Loading() => loadingWidget,
       Success() => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SafeArea(
-              top: false,
-              bottom: false,
-              child: TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                controller: _followController.tabController,
-                tabs: List.generate(_followController.tabs.length, (index) {
-                  return Obx(() {
-                    final item = _followController.tabs[index];
-                    int? count = item.count;
-                    if (_isCustomTag(item.tagid)) {
-                      return GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onLongPress: () {
-                          Feedback.forLongPress(context);
-                          _onHandleTag(index, item);
-                        },
-                        child: Tab(
-                          child: Row(
-                            children: [
-                              Text(
-                                '${item.name}${count != null ? '($count)' : ''} ',
-                              ),
-                              const Icon(Icons.menu, size: 18),
-                            ],
-                          ),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ViewSafeArea(
+            child: TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              controller: _followController.tabController,
+              tabs: List.generate(_followController.tabs.length, (index) {
+                return Obx(() {
+                  final item = _followController.tabs[index];
+                  int? count = item.count;
+                  if (_isCustomTag(item.tagid)) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onLongPress: () {
+                        Feedback.forLongPress(context);
+                        _onHandleTag(index, item);
+                      },
+                      onSecondaryTap: Utils.isMobile
+                          ? null
+                          : () => _onHandleTag(index, item),
+                      child: Tab(
+                        child: Row(
+                          children: [
+                            Text(
+                              '${item.name}${count != null ? '($count)' : ''} ',
+                            ),
+                            const Icon(Icons.menu, size: 18),
+                          ],
                         ),
-                      );
-                    }
-                    return Tab(
-                        text: '${item.name}${count != null ? '($count)' : ''}');
-                  });
-                }),
-                onTap: (value) {
-                  if (!_followController.tabController!.indexIsChanging) {
-                    final item = _followController.tabs[value];
-                    // if (_isCustomTag(item.tagid)) {
-                    //   _onHandleTag(value, item);
-                    // }
-                    try {
-                      Get.find<FollowChildController>(tag: '$_tag${item.tagid}')
-                          .animateToTop();
-                    } catch (_) {}
+                      ),
+                    );
                   }
-                },
-              ),
+                  return Tab(
+                    text: '${item.name}${count != null ? '($count)' : ''}',
+                  );
+                });
+              }),
+              onTap: (value) {
+                if (!_followController.tabController!.indexIsChanging) {
+                  final item = _followController.tabs[value];
+                  // if (_isCustomTag(item.tagid)) {
+                  //   _onHandleTag(value, item);
+                  // }
+                  try {
+                    Get.find<FollowChildController>(
+                      tag: '$_tag${item.tagid}',
+                    ).animateToTop();
+                  } catch (_) {}
+                }
+              },
             ),
-            Expanded(
-              child: Material(
-                color: Colors.transparent,
-                child: tabBarView(
-                  controller: _followController.tabController,
-                  children: _followController.tabs.map(_childPage).toList(),
-                ),
-              ),
+          ),
+          Expanded(
+            child: tabBarView(
+              controller: _followController.tabController,
+              children: _followController.tabs.map(_childPage).toList(),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
       Error() => _childPage(),
     };
   }
@@ -177,13 +196,13 @@ class _FollowPageState extends State<FollowPage> {
                       inputFormatters: [
                         LengthLimitingTextInputFormatter(16),
                       ],
-                      decoration:
-                          const InputDecoration(border: OutlineInputBorder()),
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     onConfirm: () {
                       if (tagName.isNotEmpty) {
-                        _followController.onUpdateTag(
-                            index, item.tagid, tagName);
+                        _followController.onUpdateTag(item, tagName);
                       }
                     },
                   );

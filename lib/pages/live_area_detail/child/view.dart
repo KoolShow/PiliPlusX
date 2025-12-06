@@ -1,7 +1,7 @@
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/self_sized_horizontal_list.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/live/live_feed_index/card_data_list_item.dart';
@@ -48,56 +48,59 @@ class _LiveAreaChildPageState extends State<LiveAreaChildPage>
               left: StyleString.safeSpace,
               right: StyleString.safeSpace,
               top: StyleString.safeSpace,
-              bottom: MediaQuery.paddingOf(context).bottom + 80,
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
             ),
-            sliver:
-                Obx(() => _buildBody(theme, _controller.loadingState.value)),
+            sliver: Obx(
+              () => _buildBody(theme, _controller.loadingState.value),
+            ),
           ),
         ],
       ),
     );
   }
 
+  late final gridDelegate = SliverGridDelegateWithExtentAndRatio(
+    mainAxisSpacing: StyleString.cardSpace,
+    crossAxisSpacing: StyleString.cardSpace,
+    maxCrossAxisExtent: Grid.smallCardWidth,
+    childAspectRatio: StyleString.aspectRatio,
+    mainAxisExtent: MediaQuery.textScalerOf(context).scale(90),
+  );
+
   Widget _buildBody(
-      ThemeData theme, LoadingState<List<CardLiveItem>?> loadingState) {
+    ThemeData theme,
+    LoadingState<List<CardLiveItem>?> loadingState,
+  ) {
     return switch (loadingState) {
-      Loading() => SliverGrid(
-          gridDelegate: SliverGridDelegateWithExtentAndRatio(
-            mainAxisSpacing: StyleString.cardSpace,
-            crossAxisSpacing: StyleString.cardSpace,
-            maxCrossAxisExtent: Grid.smallCardWidth,
-            childAspectRatio: StyleString.aspectRatio,
-            mainAxisExtent: MediaQuery.textScalerOf(context).scale(90),
-          ),
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              return const VideoCardVSkeleton();
-            },
-            childCount: 10,
-          ),
-        ),
+      Loading() => SliverGrid.builder(
+        gridDelegate: gridDelegate,
+        itemBuilder: (context, index) => const VideoCardVSkeleton(),
+        itemCount: 10,
+      ),
       Success(:var response) => SliverMainAxisGroup(
-          slivers: [
-            if (_controller.newTags?.isNotEmpty == true)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SelfSizedHorizontalList(
-                    gapSize: 12,
-                    childBuilder: (index) {
-                      late final item = _controller.newTags![index];
-                      return Obx(
-                        () => SearchText(
+        slivers: [
+          if (_controller.newTags?.isNotEmpty == true)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: SelfSizedHorizontalList(
+                  gapSize: 12,
+                  childBuilder: (index) {
+                    late final item = _controller.newTags![index];
+                    return Obx(
+                      () {
+                        final isCurr = index == _controller.tagIndex.value;
+                        return SearchText(
                           fontSize: 14,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 3,
                           ),
                           text: '${item.name}',
-                          bgColor: index == _controller.tagIndex.value
+                          bgColor: isCurr
                               ? theme.colorScheme.secondaryContainer
                               : Colors.transparent,
-                          textColor: index == _controller.tagIndex.value
+                          textColor: isCurr
                               ? theme.colorScheme.onSecondaryContainer
                               : null,
                           onTap: (value) {
@@ -106,42 +109,32 @@ class _LiveAreaChildPageState extends State<LiveAreaChildPage>
                               item.sortType,
                             );
                           },
-                        ),
-                      );
-                    },
-                    itemCount: _controller.newTags!.length,
-                  ),
+                        );
+                      },
+                    );
+                  },
+                  itemCount: _controller.newTags!.length,
                 ),
               ),
-            response?.isNotEmpty == true
-                ? SliverGrid(
-                    gridDelegate: SliverGridDelegateWithExtentAndRatio(
-                      mainAxisSpacing: StyleString.cardSpace,
-                      crossAxisSpacing: StyleString.cardSpace,
-                      maxCrossAxisExtent: Grid.smallCardWidth,
-                      childAspectRatio: StyleString.aspectRatio,
-                      mainAxisExtent:
-                          MediaQuery.textScalerOf(context).scale(90),
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (index == response.length - 1) {
-                          _controller.onLoadMore();
-                        }
-                        return LiveCardVApp(item: response[index]);
-                      },
-                      childCount: response!.length,
-                    ),
-                  )
-                : HttpError(
-                    onReload: _controller.onReload,
-                  ),
-          ],
-        ),
+            ),
+          response != null && response.isNotEmpty
+              ? SliverGrid.builder(
+                  gridDelegate: gridDelegate,
+                  itemBuilder: (context, index) {
+                    if (index == response.length - 1) {
+                      _controller.onLoadMore();
+                    }
+                    return LiveCardVApp(item: response[index]);
+                  },
+                  itemCount: response.length,
+                )
+              : HttpError(onReload: _controller.onReload),
+        ],
+      ),
       Error(:var errMsg) => HttpError(
-          errMsg: errMsg,
-          onReload: _controller.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _controller.onReload,
+      ),
     };
   }
 

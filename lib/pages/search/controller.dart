@@ -6,81 +6,126 @@ import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/search/suggest.dart';
 import 'package:PiliPlus/models_new/search/search_rcmd/data.dart';
 import 'package:PiliPlus/models_new/search/search_trending/data.dart';
+import 'package:PiliPlus/utils/extension.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:stream_transform/stream_transform.dart';
 
-class SSearchController extends GetxController {
+mixin DebounceStreamMixin<T> {
+  Duration duration = const Duration(milliseconds: 200);
+  StreamController<T>? ctr;
+  StreamSubscription<T>? sub;
+  void onValueChanged(T value);
+
+  void subInit() {
+    ctr = StreamController<T>();
+    sub = ctr!.stream.debounce(duration, trailing: true).listen(onValueChanged);
+  }
+
+  void subDispose() {
+    sub?.cancel();
+    ctr?.close();
+    sub = null;
+    ctr = null;
+  }
+}
+
+abstract class DebounceStreamState<T extends StatefulWidget, S> extends State<T>
+    with DebounceStreamMixin<S> {
+  @override
+  void dispose() {
+    subDispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    subInit();
+  }
+}
+
+class BaseSearchController extends GetxController {
+  final historyList = List<String>.from(
+    GStorage.historyWord.get('cacheList') ?? [],
+  ).obs;
+
+  late final Rx<LoadingState<SearchTrendingData>> trendingState;
+
+  final recordSearchHistory = Pref.recordSearchHistory.obs;
+  final searchSuggestion = Pref.searchSuggestion;
+  final enableTrending = Pref.enableTrending;
+  final enableSearchRcmd = Pref.enableSearchRcmd;
+
+  @override
+  void onInit() {
+    super.onInit();
+
+    if (enableTrending) {
+      trendingState = LoadingState<SearchTrendingData>.loading().obs;
+      queryTrendingList();
+    }
+  }
+
+  // 获取热搜关键词
+  Future<void> queryTrendingList() async {
+    trendingState.value = await SearchHttp.searchTrending(limit: 10);
+  }
+}
+
+class SSearchController extends GetxController
+    with DebounceStreamMixin<String> {
   SSearchController(this.tag);
   final String tag;
 
   final searchFocusNode = FocusNode();
   final controller = TextEditingController();
+  final _baseCtr = Get.putOrFind(BaseSearchController.new);
 
-  String hintText = '搜索';
+  String? hintText;
 
   int initIndex = 0;
 
   // uid
-  RxBool showUidBtn = false.obs;
-  late final digitOnlyRegExp = RegExp(r'^\d+$');
+  final RxBool showUidBtn = false.obs;
 
   // history
-  late final RxBool recordSearchHistory;
-  late final RxList<String> historyList;
+  RxBool get recordSearchHistory => _baseCtr.recordSearchHistory;
+  RxList<String> get historyList => _baseCtr.historyList;
 
   // suggestion
-  late final bool searchSuggestion;
-  StreamController<String>? _ctr;
-  StreamSubscription<String>? _sub;
+  bool get searchSuggestion => _baseCtr.searchSuggestion;
   late final RxList<SearchSuggestItem> searchSuggestList;
 
   // trending
-  late final bool enableHotKey;
-  late final Rx<LoadingState<SearchTrendingData>> loadingState;
+  bool get enableTrending => _baseCtr.enableTrending;
+  Rx<LoadingState<SearchTrendingData>> get trendingState =>
+      _baseCtr.trendingState;
 
   // rcmd
-  late final bool enableSearchRcmd;
+  bool get enableSearchRcmd => _baseCtr.enableSearchRcmd;
   late final Rx<LoadingState<SearchRcmdData>> recommendData;
+
+  Future<void> Function() get queryTrendingList => _baseCtr.queryTrendingList;
 
   @override
   void onInit() {
     super.onInit();
-    // 其他页面跳转过来
-    if (Get.parameters['keyword'] != null) {
-      onClickKeyword(Get.parameters['keyword']!);
-    }
-    if (Get.parameters['hintText'] != null) {
-      hintText = Get.parameters['hintText']!;
-    }
-    if (Get.parameters['text'] != null) {
-      controller.text = Get.parameters['text']!;
-    }
-
-    searchSuggestion = GStorage.searchSuggestion;
-    enableHotKey =
-        GStorage.setting.get(SettingBoxKey.enableHotKey, defaultValue: true);
-    enableSearchRcmd = GStorage.setting
-        .get(SettingBoxKey.enableSearchRcmd, defaultValue: true);
-    recordSearchHistory = GStorage.recordSearchHistory.obs;
-
-    if (recordSearchHistory.value) {
-      historyList =
-          List<String>.from(GStorage.historyWord.get('cacheList') ?? []).obs;
+    final params = Get.parameters;
+    hintText = params['hintText'];
+    final text = params['text'];
+    if (text != null) {
+      controller.text = text;
     }
 
     if (searchSuggestion) {
-      _ctr = StreamController<String>();
-      _sub = _ctr!.stream
-          .debounce(const Duration(milliseconds: 200), trailing: true)
-          .listen(querySearchSuggest);
+      subInit();
       searchSuggestList = <SearchSuggestItem>[].obs;
-    }
-
-    if (enableHotKey) {
-      loadingState = LoadingState<SearchTrendingData>.loading().obs;
-      queryHotSearchList();
     }
 
     if (enableSearchRcmd) {
@@ -90,7 +135,7 @@ class SSearchController extends GetxController {
   }
 
   void validateUid() {
-    showUidBtn.value = digitOnlyRegExp.hasMatch(controller.text);
+    showUidBtn.value = IdUtils.digitOnlyRegExp.hasMatch(controller.text);
   }
 
   void onChange(String value) {
@@ -99,7 +144,7 @@ class SSearchController extends GetxController {
       if (value.isEmpty) {
         searchSuggestList.clear();
       } else {
-        _ctr!.add(value);
+        ctr!.add(value);
       }
     }
   }
@@ -107,7 +152,7 @@ class SSearchController extends GetxController {
   void onClear() {
     if (controller.value.text != '') {
       controller.clear();
-      searchSuggestList.clear();
+      if (searchSuggestion) searchSuggestList.clear();
       searchFocusNode.requestFocus();
       showUidBtn.value = false;
     } else {
@@ -118,10 +163,10 @@ class SSearchController extends GetxController {
   // 搜索
   Future<void> submit() async {
     if (controller.text.isEmpty) {
-      if (hintText.isEmpty) {
+      if (hintText.isNullOrEmpty) {
         return;
       }
-      controller.text = hintText;
+      controller.text = hintText!;
       validateUid();
     }
 
@@ -133,7 +178,6 @@ class SSearchController extends GetxController {
     }
 
     searchFocusNode.unfocus();
-
     await Get.toNamed(
       '/searchResult',
       parameters: {
@@ -146,11 +190,13 @@ class SSearchController extends GetxController {
       },
     );
     searchFocusNode.requestFocus();
-  }
-
-  // 获取热搜关键词
-  Future<void> queryHotSearchList() async {
-    loadingState.value = await SearchHttp.searchTrending(limit: 10);
+    if (Utils.isDesktop) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        controller.selection = TextSelection.collapsed(
+          offset: controller.text.length,
+        );
+      });
+    }
   }
 
   Future<void> queryRecommendList() async {
@@ -161,11 +207,12 @@ class SSearchController extends GetxController {
     controller.text = keyword;
     validateUid();
 
-    searchSuggestList.clear();
+    if (searchSuggestion) searchSuggestList.clear();
     submit();
   }
 
-  Future<void> querySearchSuggest(String value) async {
+  @override
+  Future<void> onValueChanged(String value) async {
     var res = await SearchHttp.searchSuggest(term: value);
     if (res['status']) {
       SearchSuggestModel data = res['data'];
@@ -186,17 +233,16 @@ class SSearchController extends GetxController {
       title: '确定清空搜索历史？',
       onConfirm: () {
         historyList.clear();
-        GStorage.historyWord.put('cacheList', []);
+        GStorage.historyWord.delete('cacheList');
       },
     );
   }
 
   @override
   void onClose() {
+    subDispose();
     searchFocusNode.dispose();
     controller.dispose();
-    _sub?.cancel();
-    _ctr?.close();
     super.onClose();
   }
 }

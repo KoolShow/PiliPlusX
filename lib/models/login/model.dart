@@ -18,26 +18,26 @@ class CaptchaDataModel {
   CaptchaDataModel.fromJson(Map<String, dynamic> json) {
     type = json["type"];
     token = json["token"];
-    geetest =
-        json["geetest"] != null ? GeetestData.fromJson(json["geetest"]) : null;
-    tencent =
-        json["tencent"] != null ? Tencent.fromJson(json["tencent"]) : null;
+    geetest = json["geetest"] != null
+        ? GeetestData.fromJson(json["geetest"])
+        : null;
+    tencent = json["tencent"] != null
+        ? Tencent.fromJson(json["tencent"])
+        : null;
   }
 }
 
 class GeetestData {
-  GeetestData({
-    this.challenge,
-    this.gt,
+  const GeetestData({
+    required this.challenge,
+    required this.gt,
   });
 
-  String? challenge;
-  String? gt;
+  final String challenge;
+  final String gt;
 
-  GeetestData.fromJson(Map<String, dynamic> json) {
-    challenge = json["challenge"];
-    gt = json["gt"];
-  }
+  factory GeetestData.fromJson(Map<String, dynamic> json) =>
+      GeetestData(challenge: json["challenge"], gt: json["gt"]);
 }
 
 class Tencent {

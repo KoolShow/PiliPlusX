@@ -3,7 +3,7 @@ import 'package:PiliPlus/pages/fan/view.dart';
 import 'package:PiliPlus/pages/follow/child/child_view.dart';
 import 'package:PiliPlus/pages/follow_search/view.dart';
 import 'package:PiliPlus/pages/share/view.dart' show UserModel;
-import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -18,7 +18,7 @@ class ContactPage extends StatefulWidget {
 
 class _ContactPageState extends State<ContactPage>
     with SingleTickerProviderStateMixin {
-  AccountService accountService = Get.find<AccountService>();
+  late final mid = Accounts.main.mid;
   late final _controller = TabController(length: 2, vsync: this);
 
   @override
@@ -34,6 +34,7 @@ class _ContactPageState extends State<ContactPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('通讯录'),
         bottom: TabBar(
@@ -49,7 +50,7 @@ class _ContactPageState extends State<ContactPage>
               UserModel? userModel = await Navigator.of(context).push(
                 GetPageRoute(
                   page: () => FollowSearchPage(
-                    mid: accountService.mid,
+                    mid: mid,
                     isFromSelect: widget.isFromSelect,
                   ),
                 ),
@@ -67,11 +68,11 @@ class _ContactPageState extends State<ContactPage>
         controller: _controller,
         children: [
           FollowChildPage(
-            mid: accountService.mid,
+            mid: mid,
             onSelect: widget.isFromSelect ? onSelect : null,
           ),
           FansPage(
-            mid: accountService.mid,
+            showName: false,
             onSelect: widget.isFromSelect ? onSelect : null,
           ),
         ],

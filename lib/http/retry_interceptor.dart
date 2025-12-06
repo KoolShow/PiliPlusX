@@ -1,5 +1,6 @@
 import 'package:PiliPlus/http/init.dart';
 import 'package:dio/dio.dart';
+import 'package:http2/http2.dart';
 
 class RetryInterceptor extends Interceptor {
   final int _count;
@@ -9,6 +10,9 @@ class RetryInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (err.requestOptions.responseType == ResponseType.stream) {
+      return handler.next(err);
+    }
     if (err.response != null) {
       final options = err.requestOptions;
       if (options.followRedirects && options.maxRedirects > 0) {
@@ -29,9 +33,15 @@ class RetryInterceptor extends Interceptor {
             }
             Request.dio
                 .fetch(options)
-                .then((i) => handler.resolve(i
-                  ..redirects.add(RedirectRecord(status, options.method, uri))
-                  ..isRedirect = true))
+                .then(
+                  (i) => handler.resolve(
+                    i
+                      ..redirects.add(
+                        RedirectRecord(status, options.method, uri),
+                      )
+                      ..isRedirect = true,
+                  ),
+                )
                 .onError<DioException>((error, _) => handler.next(error));
             return;
           }
@@ -44,15 +54,19 @@ class RetryInterceptor extends Interceptor {
         case DioExceptionType.connectionTimeout:
         case DioExceptionType.sendTimeout:
         case DioExceptionType.unknown:
-          if ((err.requestOptions.extra['_rt'] ??= 0) < _count) {
+          if ((err.requestOptions.extra['_rt'] ??= 0) < _count &&
+              err.error
+                  is! TransportConnectionException // 网络中断, 此时请求可能已经被服务器所接收
+                  ) {
             Future.delayed(
-                Duration(
-                    milliseconds: ++err.requestOptions.extra['_rt'] * _delay),
-                () => Request.dio
-                    .fetch(err.requestOptions)
-                    .then(handler.resolve)
-                    .onError<DioException>(
-                        (error, _) => handler.reject(error)));
+              Duration(
+                milliseconds: ++err.requestOptions.extra['_rt'] * _delay,
+              ),
+              () => Request.dio
+                  .fetch(err.requestOptions)
+                  .then(handler.resolve)
+                  .onError<DioException>((error, _) => handler.reject(error)),
+            );
           } else {
             handler.next(err);
           }

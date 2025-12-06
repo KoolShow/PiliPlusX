@@ -6,32 +6,30 @@ import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/member/tab_type.dart';
 import 'package:PiliPlus/models_new/space/space/data.dart';
+import 'package:PiliPlus/models_new/space/space/live.dart';
 import 'package:PiliPlus/models_new/space/space/setting.dart';
 import 'package:PiliPlus/models_new/space/space/tab2.dart';
 import 'package:PiliPlus/pages/common/common_data_controller.dart';
-import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
     show ExtendedNestedScrollViewState;
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
 class MemberController extends CommonDataController<SpaceData, SpaceData?>
     with GetTickerProviderStateMixin {
   MemberController({required this.mid});
   int mid;
   String? username;
-  RxBool showUname = false.obs;
 
-  AccountService accountService = Get.find<AccountService>();
+  late final account = Accounts.main;
 
-  dynamic live;
+  Live? live;
   int? silence;
-  String? endTime;
 
   int? isFollowed; // 被关注
   RxInt relation = 0.obs;
@@ -42,20 +40,12 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   late List<Tab> tabs;
   TabController? tabController;
   RxInt contributeInitialIndex = 0.obs;
-  late final implTabs = const [
-    'home',
-    'dynamic',
-    'contribute',
-    'favorite',
-    'bangumi',
-  ];
 
   bool? hasSeasonOrSeries;
 
   final fromViewAid = Get.parameters['from_view_aid'];
 
   final key = GlobalKey<ExtendedNestedScrollViewState>();
-  int offset = 120;
 
   @override
   void onInit() {
@@ -65,7 +55,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
 
   @override
   bool customHandleResponse(bool isRefresh, Success<SpaceData> response) {
-    SpaceData data = response.response;
+    final data = response.response;
     username = data.card?.name ?? '';
     isFollowed = data.card?.relation?.isFollowed;
     if (data.relation == -1) {
@@ -73,8 +63,8 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
     } else {
       relation.value = data.card?.relation?.isFollow == 1
           ? data.relSpecial == 1
-              ? -10
-              : data.card?.relation?.status ?? 2
+                ? -10
+                : data.card?.relation?.status ?? 2
           : 0;
     }
     tab2 = data.tab2;
@@ -84,25 +74,16 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
         data.series?.item?.isNotEmpty == true) {
       hasSeasonOrSeries = true;
     }
-    if (data.card?.endTime != null) {
-      if (data.card!.endTime == 0) {
-        endTime = ': 永久封禁';
-      } else if (data.card!.endTime! >
-          DateTime.now().millisecondsSinceEpoch ~/ 1000) {
-        endTime =
-            '：至 ${DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(data.card!.endTime! * 1000))}';
-      }
-    }
-    tab2?.retainWhere((item) => implTabs.contains(item.param));
+    tab2?.retainWhere((item) => MemberTabType.contains(item.param!));
     if (tab2?.isNotEmpty == true) {
-      if (data.tab!.hasItem != true && tab2!.first.param == 'home') {
+      if (data.hasItem != true && tab2!.first.param == 'home') {
         // remove empty home tab
         tab2!.removeAt(0);
       }
       if (tab2!.isNotEmpty) {
         int initialIndex = -1;
-        MemberTabType memberTab = GStorage.memberTab;
-        if (memberTab != MemberTabType.none) {
+        MemberTabType memberTab = Pref.memberTab;
+        if (memberTab != MemberTabType.def) {
           initialIndex = tab2!.indexWhere((item) {
             return item.param == memberTab.name;
           });
@@ -124,7 +105,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
         );
       }
     }
-    if (mid == accountService.mid) {
+    if (mid == account.mid) {
       spaceSetting = data.setting;
     }
     loadingState.value = response;
@@ -149,7 +130,6 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
       vsync: this,
       length: tabs.length,
     );
-    showUname.value = true;
     username = errMsg;
     loadingState.value = const Success(null);
     return true;
@@ -157,12 +137,12 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
 
   @override
   Future<LoadingState<SpaceData>> customGetData() => MemberHttp.space(
-        mid: mid,
-        fromViewAid: fromViewAid,
-      );
+    mid: mid,
+    fromViewAid: fromViewAid,
+  );
 
   void blockUser(BuildContext context) {
-    if (!accountService.isLogin.value) {
+    if (!account.isLogin) {
       SmartDialog.showToast('账号未登录');
       return;
     }
@@ -186,7 +166,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
                 _onBlock();
               },
               child: const Text('确认'),
-            )
+            ),
           ],
         );
       },
@@ -198,23 +178,24 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   }
 
   Future<void> _onBlock() async {
+    final isBlocked = relation.value == 128;
     var res = await VideoHttp.relationMod(
       mid: mid,
-      act: relation.value != 128 ? 5 : 6,
+      act: isBlocked ? 6 : 5,
       reSrc: 11,
     );
     if (res['status']) {
-      relation.value = relation.value != 128 ? 128 : 0;
+      relation.value = isBlocked ? 0 : 128;
     }
   }
 
   void onFollow(BuildContext context) {
-    if (mid == accountService.mid) {
+    if (mid == account.mid) {
       Get.toNamed('/editProfile');
     } else if (relation.value == 128) {
       _onBlock();
     } else {
-      if (!accountService.isLogin.value) {
+      if (!account.isLogin) {
         SmartDialog.showToast('账号未登录');
         return;
       }
@@ -222,9 +203,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
         context: context,
         mid: mid,
         isFollow: isFollow,
-        callback: (attribute) {
-          relation.value = attribute;
-        },
+        callback: (attribute) => relation.value = attribute,
       );
     }
   }
@@ -236,11 +215,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   }
 
   Future<void> onRemoveFan() async {
-    final res = await VideoHttp.relationMod(
-      mid: mid,
-      act: 7,
-      reSrc: 11,
-    );
+    final res = await VideoHttp.relationMod(mid: mid, act: 7, reSrc: 11);
     if (res['status']) {
       isFollowed = null;
       if (relation.value == 4) {

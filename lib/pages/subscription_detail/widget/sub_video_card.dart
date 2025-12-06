@@ -5,9 +5,10 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
-import 'package:PiliPlus/models/common/search_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/sub/sub_detail/media.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
@@ -25,62 +26,66 @@ class SubVideoCardH extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () async {
-        int? cid = await SearchHttp.ab2c(bvid: videoItem.bvid);
-        if (cid != null) {
-          PageUtils.toVideoPage(
-            'bvid=${videoItem.bvid}&cid=$cid',
-            arguments: {
-              'videoItem': videoItem,
-              'heroTag': Utils.makeHeroTag(videoItem.id),
-              'videoType': SearchType.video,
-            },
-          );
-        }
-      },
-      onLongPress: () => imageSaveDialog(
-        title: videoItem.title,
-        cover: videoItem.cover,
-        bvid: videoItem.bvid,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: StyleString.safeSpace,
-          vertical: 5,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: StyleString.aspectRatio,
-              child: LayoutBuilder(
-                builder: (context, boxConstraints) {
-                  double maxWidth = boxConstraints.maxWidth;
-                  double maxHeight = boxConstraints.maxHeight;
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      NetworkImgLayer(
-                        src: videoItem.cover,
-                        width: maxWidth,
-                        height: maxHeight,
-                      ),
-                      PBadge(
-                        text: Utils.timeFormat(videoItem.duration!),
-                        right: 6.0,
-                        bottom: 6.0,
-                        type: PBadgeType.gray,
-                      ),
-                    ],
-                  );
-                },
+    void onLongPress() => imageSaveDialog(
+      title: videoItem.title,
+      cover: videoItem.cover,
+      bvid: videoItem.bvid,
+    );
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () async {
+          int? cid = await SearchHttp.ab2c(bvid: videoItem.bvid);
+          if (cid != null) {
+            PageUtils.toVideoPage(
+              bvid: videoItem.bvid,
+              cid: cid,
+              cover: videoItem.cover,
+              title: videoItem.title,
+            );
+          }
+        },
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: StyleString.safeSpace,
+            vertical: 5,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: StyleString.aspectRatio,
+                child: LayoutBuilder(
+                  builder: (context, boxConstraints) {
+                    double maxWidth = boxConstraints.maxWidth;
+                    double maxHeight = boxConstraints.maxHeight;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        NetworkImgLayer(
+                          src: videoItem.cover,
+                          width: maxWidth,
+                          height: maxHeight,
+                        ),
+                        PBadge(
+                          text: DurationUtils.formatDuration(
+                            videoItem.duration,
+                          ),
+                          right: 6.0,
+                          bottom: 6.0,
+                          type: PBadgeType.gray,
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            content(context),
-          ],
+              const SizedBox(width: 10),
+              content(context),
+            ],
+          ),
         ),
       ),
     );
@@ -103,7 +108,7 @@ class SubVideoCardH extends StatelessWidget {
             ),
           ),
           Text(
-            Utils.dateFormat(videoItem.pubtime),
+            DateFormatUtils.dateFormat(videoItem.pubtime),
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.outline,

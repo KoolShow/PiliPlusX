@@ -3,20 +3,21 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/live/live_area_list/area_item.dart';
 import 'package:PiliPlus/models_new/live/live_area_list/area_list.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
-import 'package:PiliPlus/services/account_service.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class LiveAreaController
     extends CommonListController<List<AreaList>?, AreaList> {
-  AccountService accountService = Get.find<AccountService>();
+  late final isLogin = Accounts.main.isLogin;
 
   late final isEditing = false.obs;
+  late final favInfo = {};
 
   @override
   void onInit() {
     super.onInit();
-    if (accountService.isLogin.value) {
+    if (isLogin) {
       queryFavTags();
     }
     queryData();
@@ -24,7 +25,7 @@ class LiveAreaController
 
   @override
   Future<void> onRefresh() {
-    if (accountService.isLogin.value) {
+    if (isLogin) {
       queryFavTags();
     }
     return super.onRefresh();
@@ -35,17 +36,17 @@ class LiveAreaController
 
   @override
   Future<LoadingState<List<AreaList>?>> customGetData() =>
-      LiveHttp.liveAreaList(isLogin: accountService.isLogin.value);
+      LiveHttp.liveAreaList();
 
   Future<void> queryFavTags() async {
-    favState.value =
-        await LiveHttp.getLiveFavTag(isLogin: accountService.isLogin.value);
+    favState.value = await LiveHttp.getLiveFavTag();
   }
 
   Future<void> setFavTag() async {
     if (favState.value.isSuccess) {
       final res = await LiveHttp.setLiveFavTag(
-          ids: favState.value.data.map((e) => e.id).toList());
+        ids: favState.value.data.map((e) => e.id).join(','),
+      );
       if (res['status']) {
         isEditing.value = !isEditing.value;
         SmartDialog.showToast('设置成功');

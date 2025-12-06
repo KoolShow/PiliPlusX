@@ -14,7 +14,7 @@ class WhisperSettingsController
 
   final IMSettingType imSettingType;
 
-  RxString title = ''.obs;
+  final RxString title = ''.obs;
 
   @override
   void onInit() {
@@ -24,7 +24,9 @@ class WhisperSettingsController
 
   @override
   bool customHandleResponse(
-      bool isRefresh, Success<GetImSettingsReply> response) {
+    bool isRefresh,
+    Success<GetImSettingsReply> response,
+  ) {
     title.value = response.response.pageTitle;
     loadingState.value = Success(response.response.settings);
     return true;
@@ -34,7 +36,7 @@ class WhisperSettingsController
   Future<LoadingState<GetImSettingsReply>> customGetData() =>
       ImGrpc.getImSettings(type: imSettingType);
 
-  Future<bool> onSet(PbMap<int, Setting> settings) async {
+  Future<bool> onSet(Map<int, Setting> settings) async {
     final res = await ImGrpc.setImSettings(settings: settings);
     if (!res.isSuccess) {
       res.toast();

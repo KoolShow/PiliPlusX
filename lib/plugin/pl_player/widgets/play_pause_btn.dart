@@ -5,14 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
 class PlayOrPauseButton extends StatefulWidget {
-  final double? iconSize;
-  final Color? iconColor;
   final PlPlayerController plPlayerController;
 
   const PlayOrPauseButton({
     super.key,
-    this.iconSize,
-    this.iconColor,
     required this.plPlayerController,
   });
 
@@ -22,42 +18,32 @@ class PlayOrPauseButton extends StatefulWidget {
 
 class PlayOrPauseButtonState extends State<PlayOrPauseButton>
     with SingleTickerProviderStateMixin {
-  late final AnimationController animation;
-
-  StreamSubscription<bool>? subscription;
+  late final AnimationController controller;
+  late final StreamSubscription<bool> subscription;
   late Player player;
-  bool isOpacity = false;
-
-  PlPlayerController get plPlayerController => widget.plPlayerController;
 
   @override
   void initState() {
     super.initState();
-    player = plPlayerController.videoPlayerController!;
-    animation = AnimationController(
+    player = widget.plPlayerController.videoPlayerController!;
+    controller = AnimationController(
       vsync: this,
       value: player.state.playing ? 1 : 0,
       duration: const Duration(milliseconds: 200),
     );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    subscription ??= player.stream.playing.listen((event) {
-      if (event) {
-        animation.forward().whenComplete(() => {isOpacity = true});
+    subscription = player.stream.playing.listen((playing) {
+      if (playing) {
+        controller.forward();
       } else {
-        animation.reverse().whenComplete(() => {isOpacity = false});
+        controller.reverse();
       }
-      setState(() {});
     });
   }
 
   @override
   void dispose() {
-    animation.dispose();
-    subscription?.cancel();
+    subscription.cancel();
+    controller.dispose();
     super.dispose();
   }
 
@@ -67,21 +53,12 @@ class PlayOrPauseButtonState extends State<PlayOrPauseButton>
       width: 42,
       height: 34,
       child: GestureDetector(
-        onTap: () async {
-          if (player.state.completed) {
-            await player.seek(Duration.zero);
-            player.play();
-          } else {
-            player.playOrPause();
-          }
-        },
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.plPlayerController.onDoubleTapCenter,
         child: Center(
           child: AnimatedIcon(
-            semanticLabel:
-                plPlayerController.videoPlayerController!.state.playing
-                    ? '暂停'
-                    : '播放',
-            progress: animation,
+            semanticLabel: player.state.playing ? '暂停' : '播放',
+            progress: controller,
             icon: AnimatedIcons.play_pause,
             color: Colors.white,
             size: 20,

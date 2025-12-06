@@ -11,11 +11,14 @@ import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models/common/image_preview_type.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/extension.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
+import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -37,11 +40,19 @@ class ChatItem extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool isOwner;
 
+  // 消息来源
+  // enum MsgSource {
+  //     EN_MSG_SOURCE_AUTOREPLY_BY_FOLLOWED    = 8;  //
+  //     EN_MSG_SOURCE_AUTOREPLY_BY_RECEIVE_MSG = 9;  //
+  //     EN_MSG_SOURCE_AUTOREPLY_BY_KEYWORDS    = 10; //
+  //     EN_MSG_SOURCE_AUTOREPLY_BY_VOYAGE      = 11; //
+  // };
   @override
   Widget build(BuildContext context) {
     bool isPic = item.msgType == MsgType.EN_MSG_TYPE_PIC.value; // 图片
     bool isRevoke = item.msgType == MsgType.EN_MSG_TYPE_DRAW_BACK.value; // 撤回消息
-    bool isSystem = item.msgType == MsgType.EN_MSG_TYPE_VIDEO_CARD.value ||
+    bool isSystem =
+        item.msgType == MsgType.EN_MSG_TYPE_VIDEO_CARD.value ||
         item.msgType == MsgType.EN_MSG_TYPE_TIP_MESSAGE.value ||
         item.msgType == MsgType.EN_MSG_TYPE_NOTIFY_MSG.value ||
         item.msgType == MsgType.EN_MSG_TYPE_PICTURE_CARD.value ||
@@ -60,7 +71,7 @@ class ChatItem extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 6, bottom: 18),
                 child: Text(
-                  Utils.dateFormat(item.timestamp.toInt()),
+                  DateFormatUtils.chatFormat(item.timestamp.toInt()),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: theme.colorScheme.outline),
                 ),
@@ -73,12 +84,11 @@ class ChatItem extends StatelessWidget {
                       textColor: textColor,
                     )
                   : GestureDetector(
-                      onLongPress: onLongPress == null
-                          ? null
-                          : () {
-                              Feedback.forLongPress(context);
-                              onLongPress!();
-                            },
+                      onLongPress: () {
+                        Feedback.forLongPress(context);
+                        onLongPress!();
+                      },
+                      onSecondaryTap: Utils.isMobile ? null : onLongPress,
                       child: Row(
                         mainAxisAlignment: isOwner
                             ? MainAxisAlignment.end
@@ -90,12 +100,19 @@ class ChatItem extends StatelessWidget {
                               color: isOwner
                                   ? theme.colorScheme.secondaryContainer
                                   : theme.colorScheme.onInverseSurface,
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(16),
-                                topRight: const Radius.circular(16),
-                                bottomLeft: Radius.circular(isOwner ? 16 : 6),
-                                bottomRight: Radius.circular(isOwner ? 6 : 16),
-                              ),
+                              borderRadius: isOwner
+                                  ? const BorderRadius.only(
+                                      topLeft: Radius.circular(16),
+                                      topRight: Radius.circular(16),
+                                      bottomLeft: Radius.circular(16),
+                                      bottomRight: Radius.circular(6),
+                                    )
+                                  : const BorderRadius.only(
+                                      topLeft: Radius.circular(16),
+                                      topRight: Radius.circular(16),
+                                      bottomLeft: Radius.circular(6),
+                                      bottomRight: Radius.circular(16),
+                                    ),
                             ),
                             padding: EdgeInsets.only(
                               top: 8,
@@ -122,6 +139,23 @@ class ChatItem extends StatelessWidget {
                                       color: theme.colorScheme.onErrorContainer,
                                     ),
                                   ),
+                                if (item.msgSource >= 8 &&
+                                    item.msgSource <= 11) ...[
+                                  Divider(
+                                    height: 10,
+                                    thickness: 1,
+                                    color: theme.colorScheme.outline.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                  Text(
+                                    '此条消息为自动回复',
+                                    style: theme.textTheme.labelMedium!
+                                        .copyWith(
+                                          color: theme.colorScheme.outline,
+                                        ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -147,9 +181,9 @@ class ChatItem extends StatelessWidget {
         case MsgType.EN_MSG_TYPE_TIP_MESSAGE:
           return msgTypeTipMessage_18(theme, content);
         case MsgType.EN_MSG_TYPE_TEXT:
-          return msgTypeText_1(content: content, textColor: textColor);
+          return msgTypeText_1(theme, content: content, textColor: textColor);
         case MsgType.EN_MSG_TYPE_PIC:
-          return msgTypePic_2(context, content);
+          return msgTypePic_2(content);
         case MsgType.EN_MSG_TYPE_SHARE_V2:
           return msgTypeShareV2_7(content, textColor);
         case MsgType.EN_MSG_TYPE_VIDEO_CARD:
@@ -175,7 +209,13 @@ class ChatItem extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () => Get.toNamed('/liveRoom?roomid=${content['sourceID']}'),
+            onTap: () {
+              var roomId = content['sourceID'];
+              if (roomId is String) {
+                roomId = int.parse(roomId);
+              }
+              PageUtils.toLiveRoom(roomId);
+            },
             child: NetworkImgLayer(
               width: 220,
               height: 220 * 9 / 16,
@@ -286,23 +326,19 @@ class ChatItem extends StatelessWidget {
             for (var i in content['sub_cards'])
               GestureDetector(
                 onTap: () async {
-                  RegExp bvRegex =
-                      RegExp(r'BV[0-9A-Za-z]{10}', caseSensitive: false);
-                  Iterable<Match> matches = bvRegex.allMatches(i['jump_url']);
-                  if (matches.isNotEmpty) {
-                    Match match = matches.first;
-                    String bvid = match.group(0)!;
+                  String? bvid = IdUtils.bvRegex
+                      .firstMatch(i['jump_url'])
+                      ?.group(0);
+                  if (bvid != null) {
                     try {
                       SmartDialog.showLoading();
                       final int? cid = await SearchHttp.ab2c(bvid: bvid);
                       SmartDialog.dismiss();
                       if (cid != null) {
                         PageUtils.toVideoPage(
-                          'bvid=$bvid&cid=$cid',
-                          arguments: <String, String?>{
-                            'pic': i['cover_url'],
-                            'heroTag': Utils.makeHeroTag(bvid),
-                          },
+                          bvid: bvid,
+                          cid: cid,
+                          cover: i['cover_url'],
                         );
                       }
                     } catch (err) {
@@ -387,11 +423,9 @@ class ChatItem extends StatelessWidget {
                   SmartDialog.dismiss();
                   if (cid != null) {
                     PageUtils.toVideoPage(
-                      'bvid=$bvid&cid=$cid',
-                      arguments: {
-                        'pic': content['thumb'],
-                        'heroTag': Utils.makeHeroTag(bvid),
-                      },
+                      bvid: bvid,
+                      cid: cid,
+                      cover: content['cover'],
                     );
                   }
                 } catch (err) {
@@ -417,13 +451,15 @@ class ChatItem extends StatelessWidget {
                         type: PBadgeType.gray,
                         text: content['times'] == 0
                             ? '--:--'
-                            : Utils.timeFormat(content['times']),
-                      )
+                            : DurationUtils.formatDuration(content['times']),
+                      ),
                     ],
                   ),
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     child: Text(
                       content['times'] == 0 ? '内容已失效' : content['title'],
                       style: TextStyle(
@@ -471,11 +507,10 @@ class ChatItem extends StatelessWidget {
           SmartDialog.dismiss();
           if (cid != null) {
             PageUtils.toVideoPage(
-              'bvid=$bvid&cid=$cid',
-              arguments: <String, String?>{
-                'pic': content['thumb'],
-                'heroTag': Utils.makeHeroTag(bvid),
-              },
+              aid: aid,
+              bvid: bvid,
+              cid: cid,
+              cover: content['thumb'],
             );
           }
         };
@@ -485,12 +520,12 @@ class ChatItem extends StatelessWidget {
       case 6:
         type = '专栏';
         onTap = () => Get.toNamed(
-              '/articlePage',
-              parameters: {
-                'id': '${content['id']}',
-                'type': 'read',
-              },
-            );
+          '/articlePage',
+          parameters: {
+            'id': '${content['id']}',
+            'type': 'read',
+          },
+        );
         break;
 
       // dynamic
@@ -506,7 +541,8 @@ class ChatItem extends StatelessWidget {
 
       default:
         onTap = () => SmartDialog.showToast(
-            'unsupported source type: ${content['source']}');
+          'unsupported source type: ${content['source']}',
+        );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,16 +594,16 @@ class ChatItem extends StatelessWidget {
     );
   }
 
-  Widget msgTypePic_2(BuildContext context, content) {
+  Widget msgTypePic_2(content) {
+    final url = content['url'];
     return GestureDetector(
-      onTap: () =>
-          context.imageView(imgList: [SourceModel(url: content['url'])]),
+      onTap: () => PageUtils.imageView(imgList: [SourceModel(url: url)]),
       child: Hero(
-        tag: content['url'],
+        tag: url,
         child: NetworkImgLayer(
           width: 220,
           height: 220 * content['height'] / content['width'],
-          src: content['url'],
+          src: url,
         ),
       ),
     );
@@ -588,56 +624,86 @@ class ChatItem extends StatelessWidget {
     );
   }
 
-  Widget msgTypeText_1({
+  Widget msgTypeText_1(
+    ThemeData theme, {
     required dynamic content,
     required Color textColor,
   }) {
-    late final style = TextStyle(
-      color: textColor,
-      letterSpacing: 0.6,
-      height: 1.5,
-    );
+    final style = TextStyle(color: textColor, letterSpacing: 0.6, height: 1.5);
+    final List<InlineSpan> children = [];
+    late final Map<String, Map> emojiMap = {};
+    final List<String> patterns = [Constants.urlRegex.pattern];
     if (eInfos != null) {
-      final List<InlineSpan> children = [];
-      Map<String, Map> emojiMap = {};
       for (var e in eInfos!) {
-        emojiMap[e.text] = {
+        emojiMap[e.text] ??= {
           'url': e.hasGifUrl() ? e.gifUrl : e.url,
-          'size': e.size * 24.0,
+          'size': e.size * 22.0,
         };
       }
-      content['content'].splitMapJoin(
-        RegExp(r"\[[^\[\]]+\]"),
-        onMatch: (Match match) {
-          final String emojiKey = match[0]!;
-          if (emojiMap.containsKey(emojiKey)) {
+      patterns.addAll(emojiMap.keys.map(RegExp.escape));
+    }
+    final regex = RegExp(patterns.join('|'));
+    content['content'].splitMapJoin(
+      regex,
+      onMatch: (Match match) {
+        final matchStr = match[0]!;
+        if (matchStr.startsWith('[')) {
+          final emoji = emojiMap[matchStr];
+          if (emoji != null) {
+            final size = emoji['size'];
             children.add(
               WidgetSpan(
                 child: NetworkImgLayer(
-                  width: emojiMap[emojiKey]!['size'],
-                  height: emojiMap[emojiKey]!['size'],
-                  src: emojiMap[emojiKey]!['url'],
+                  width: size,
+                  height: size,
+                  src: emoji['url'],
                   type: ImageType.emote,
                 ),
               ),
             );
           } else {
-            children.add(TextSpan(text: emojiKey, style: style));
+            children.add(TextSpan(text: matchStr, style: style));
           }
-          return '';
-        },
-        onNonMatch: (String text) {
-          children.add(TextSpan(text: text, style: style));
-          return '';
-        },
-      );
-      return SelectableText.rich(TextSpan(children: children));
-    }
-    return SelectableText(content['content'], style: style);
+        } else {
+          children.add(
+            TextSpan(
+              text: matchStr,
+              style: style.copyWith(color: theme.colorScheme.primary),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => PiliScheme.routePushFromUrl(matchStr),
+            ),
+          );
+        }
+        return '';
+      },
+      onNonMatch: (String text) {
+        children.add(TextSpan(text: text, style: style));
+        return '';
+      },
+    );
+    return SelectableText.rich(TextSpan(children: children));
   }
 
   Widget msgTypeNotifyMsg_10(ThemeData theme, content) {
     List? modules = content['modules'] as List?;
+    List<Widget>? jumpItem([String index = '']) {
+      final String? uri = content['jump_uri$index'];
+      if (uri != null && uri.isNotEmpty) {
+        final String? text = content['jump_text$index'];
+        return [
+          Divider(color: theme.colorScheme.primary.withValues(alpha: 0.05)),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => PiliScheme.routePushFromUrl(uri),
+            child: Text(
+              text != null && text.isNotEmpty ? text : '查看详情',
+            ),
+          ),
+        ];
+      }
+      return null;
+    }
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -647,7 +713,7 @@ class ChatItem extends StatelessWidget {
         ),
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SelectableText(
               content['title'],
@@ -656,61 +722,30 @@ class ChatItem extends StatelessWidget {
               ),
             ),
             Divider(color: theme.colorScheme.primary.withValues(alpha: 0.05)),
-            SelectableText(content['text']),
-            if (modules?.isNotEmpty == true) ...[
+            if ((content['text'] as String?)?.isNotEmpty == true)
+              SelectableText(content['text']),
+            if (modules != null && modules.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text.rich(
-                TextSpan(
-                  children: modules!.indexed
-                      .map((e) => TextSpan(children: [
-                            TextSpan(
-                                text: e.$2['title'],
-                                style: TextStyle(
-                                    color: theme.colorScheme.outline)),
-                            TextSpan(text: '    ${e.$2['detail']}'),
-                            if (e.$1 != modules.length - 1)
-                              const TextSpan(text: '\n'),
-                          ]))
-                      .toList(),
+              ...modules.map(
+                (e) => Row(
+                  spacing: 10,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      child: Text(
+                        e['title'],
+                        style: TextStyle(color: theme.colorScheme.outline),
+                      ),
+                    ),
+                    Expanded(child: Text(e['detail'])),
+                  ],
                 ),
               ),
             ],
-            if ((content['jump_text'] as String?)?.isNotEmpty == true &&
-                (content['jump_uri'] as String?)?.isNotEmpty == true) ...[
-              Divider(color: theme.colorScheme.primary.withValues(alpha: 0.05)),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => PiliScheme.routePushFromUrl(content['jump_uri']),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Text(content['jump_text']),
-                ),
-              ),
-            ],
-            if ((content['jump_text_2'] as String?)?.isNotEmpty == true &&
-                (content['jump_uri_2'] as String?)?.isNotEmpty == true) ...[
-              Divider(color: theme.colorScheme.primary.withValues(alpha: 0.05)),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => PiliScheme.routePushFromUrl(content['jump_uri_2']),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Text(content['jump_text_2']),
-                ),
-              ),
-            ],
-            if ((content['jump_text_3'] as String?)?.isNotEmpty == true &&
-                (content['jump_uri_3'] as String?)?.isNotEmpty == true) ...[
-              Divider(color: theme.colorScheme.primary.withValues(alpha: 0.05)),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => PiliScheme.routePushFromUrl(content['jump_uri_3']),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Text(content['jump_text_3']),
-                ),
-              ),
-            ],
+            ...?jumpItem(),
+            ...?jumpItem('_2'),
+            ...?jumpItem('_3'),
           ],
         ),
       ),
@@ -718,17 +753,16 @@ class ChatItem extends StatelessWidget {
   }
 
   Widget msgTypePictureCard_13(dynamic content) {
+    final url = content['jump_url'];
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400.0),
         child: ClipRRect(
           borderRadius: StyleString.mdRadius,
           child: GestureDetector(
-            onTap: content['jump_url'] == null
-                ? null
-                : () => PiliScheme.routePushFromUrl(content['jump_url']),
+            onTap: url == null ? null : () => PiliScheme.routePushFromUrl(url),
             child: CachedNetworkImage(
-              imageUrl: Utils.thumbnailImgUrl(content['pic_url']),
+              imageUrl: ImageUtils.thumbnailUrl(content['pic_url']),
             ),
           ),
         ),

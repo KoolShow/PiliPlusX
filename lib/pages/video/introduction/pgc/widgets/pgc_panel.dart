@@ -1,10 +1,12 @@
 import 'dart:async';
 
-import 'package:PiliPlus/models/user/info.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/new_ep.dart';
+import 'package:PiliPlus/models_new/video/video_detail/episode.dart'
+    hide EpisodeItem;
 import 'package:PiliPlus/pages/video/controller.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/extension.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -15,7 +17,7 @@ class PgcPanel extends StatefulWidget {
     super.key,
     required this.pages,
     this.cid,
-    required this.changeFuc,
+    required this.onChangeEpisode,
     required this.showEpisodes,
     required this.heroTag,
     this.newEp,
@@ -23,7 +25,7 @@ class PgcPanel extends StatefulWidget {
 
   final List<EpisodeItem> pages;
   final int? cid;
-  final Function changeFuc;
+  final ValueChanged<BaseEpisodeItem> onChangeEpisode;
   final Function showEpisodes;
   final String heroTag;
   final NewEp? newEp;
@@ -34,22 +36,23 @@ class PgcPanel extends StatefulWidget {
 
 class _PgcPanelState extends State<PgcPanel> {
   late int currentIndex;
-  final ScrollController listViewScrollCtr = ScrollController();
+  late final ScrollController listViewScrollCtr;
   // 默认未开通
-  late int vipStatus;
+  late final bool vipStatus;
   late int cid;
   late final VideoDetailController videoDetailCtr;
-  StreamSubscription? _listener;
+  late final StreamSubscription<int> _listener;
 
   @override
   void initState() {
     super.initState();
     cid = widget.cid!;
     currentIndex = widget.pages.indexWhere((e) => e.cid == cid);
-    scrollToIndex();
+    listViewScrollCtr = ScrollController(
+      initialScrollOffset: currentIndex * 150.0,
+    );
 
-    UserInfoData? userInfo = GStorage.userInfo.get('userInfoCache');
-    vipStatus = userInfo?.vipStatus ?? 0;
+    vipStatus = Pref.userInfoCache?.vipStatus != 1;
 
     videoDetailCtr = Get.find<VideoDetailController>(tag: widget.heroTag);
 
@@ -64,7 +67,7 @@ class _PgcPanelState extends State<PgcPanel> {
 
   @override
   void dispose() {
-    _listener?.cancel();
+    _listener.cancel();
     listViewScrollCtr.dispose();
     super.dispose();
   }
@@ -72,8 +75,10 @@ class _PgcPanelState extends State<PgcPanel> {
   void scrollToIndex() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       listViewScrollCtr.animateTo(
-        (currentIndex * 150.0).clamp(listViewScrollCtr.position.minScrollExtent,
-            listViewScrollCtr.position.maxScrollExtent),
+        (currentIndex * 150.0).clamp(
+          listViewScrollCtr.position.minScrollExtent,
+          listViewScrollCtr.position.maxScrollExtent,
+        ),
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
@@ -82,7 +87,9 @@ class _PgcPanelState extends State<PgcPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme = Theme.of(context).colorScheme;
+    final currEpisode = widget.pages[currentIndex];
+    final isPugv = currEpisode.from == 'pugv';
     return Column(
       children: [
         Padding(
@@ -93,33 +100,30 @@ class _PgcPanelState extends State<PgcPanel> {
               const Text('合集 '),
               Expanded(
                 child: Text(
-                  ' 正在播放：${widget.pages[currentIndex].longTitle}',
+                  ' 正在播放：${currEpisode.longTitle ?? currEpisode.title}',
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.outline,
-                  ),
+                  style: TextStyle(fontSize: 12, color: theme.outline),
                 ),
               ),
               const SizedBox(width: 10),
               SizedBox(
                 height: 34,
                 child: TextButton(
-                  style: ButtonStyle(
-                    padding: WidgetStateProperty.all(EdgeInsets.zero),
+                  style: const ButtonStyle(
+                    padding: WidgetStatePropertyAll(EdgeInsets.zero),
                   ),
                   onPressed: () => widget.showEpisodes(
                     null,
                     null,
                     widget.pages,
-                    widget.pages[currentIndex].bvid,
-                    widget.pages[currentIndex].aid,
+                    videoDetailCtr.bvid,
+                    videoDetailCtr.aid,
                     cid,
                   ),
                   child: Text(
                     widget.newEp?.desc?.contains('连载') == true
                         ? '连载中，更新至${Utils.isStringNumeric(widget.newEp!.title!) ? '第${widget.newEp!.title}话' : '${widget.newEp!.title}'}'
-                        : widget.newEp?.desc ?? '',
+                        : widget.newEp?.desc ?? '查看全部',
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
@@ -130,110 +134,116 @@ class _PgcPanelState extends State<PgcPanel> {
         SizedBox(
           height: 60,
           child: ListView.builder(
+            key: const PageStorageKey(_PgcPanelState),
+            padding: EdgeInsets.zero,
             controller: listViewScrollCtr,
             scrollDirection: Axis.horizontal,
             itemCount: widget.pages.length,
             itemExtent: 150,
-            itemBuilder: (BuildContext context, int index) {
-              final item = widget.pages[index];
-              return Container(
-                width: 150,
-                margin: EdgeInsets.only(
-                  right: index == widget.pages.length - 1 ? 0 : 10,
-                ),
-                child: Material(
-                  color: theme.colorScheme.onInverseSurface,
-                  borderRadius: const BorderRadius.all(Radius.circular(6)),
-                  clipBehavior: Clip.hardEdge,
-                  child: InkWell(
-                    onTap: () {
-                      if (item.badge != null &&
-                          item.badge == '会员' &&
-                          vipStatus != 1) {
-                        SmartDialog.showToast('需要大会员');
-                      }
-                      widget.changeFuc(
-                        item.epId,
-                        item.bvid,
-                        item.cid,
-                        item.aid,
-                        item.cover,
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 8, horizontal: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: [
-                              if (index == currentIndex) ...<Widget>[
-                                Image.asset(
-                                  'assets/images/live.png',
-                                  color: theme.colorScheme.primary,
-                                  height: 12,
-                                  semanticLabel: "正在播放：",
-                                ),
-                                const SizedBox(width: 6)
-                              ],
-                              Expanded(
-                                  child: Text(
-                                item.title ?? '第${index + 1}话',
-                                maxLines: (item.longTitle != null &&
-                                        item.longTitle != '')
-                                    ? 1
-                                    : 2,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: index == currentIndex
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurface),
-                              )),
-                              const SizedBox(width: 2),
-                              if (item.badge != null) ...[
-                                const Spacer(),
-                                if (item.badge == '会员')
-                                  Image.asset(
-                                    'assets/images/big-vip.png',
-                                    height: 16,
-                                    semanticLabel: "大会员",
-                                  )
-                                else
-                                  Text(
-                                    item.badge!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                  ),
-                              ]
-                            ],
-                          ),
-                          if (item.longTitle != null &&
-                              item.longTitle != '') ...[
-                            const SizedBox(height: 3),
-                            Text(
-                              item.longTitle!,
-                              maxLines: 1,
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: index == currentIndex
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface),
-                              overflow: TextOverflow.ellipsis,
-                            )
-                          ]
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+            itemBuilder: (BuildContext context, int index) =>
+                _buildItem(theme, isPugv, index),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildItem(ColorScheme theme, bool isPugv, int index) {
+    final item = widget.pages[index];
+    final hasLongTitle = item.longTitle?.isNotEmpty == true;
+    final color = index == currentIndex ? theme.primary : theme.onSurface;
+    return Container(
+      width: 150,
+      height: 60,
+      margin: index != widget.pages.length - 1
+          ? const EdgeInsets.only(right: 10)
+          : null,
+      child: Material(
+        color: theme.onInverseSurface,
+        borderRadius: const BorderRadius.all(Radius.circular(6)),
+        child: InkWell(
+          borderRadius: const BorderRadius.all(Radius.circular(6)),
+          onTap: () {
+            if (item.badge == '会员' && vipStatus) {
+              SmartDialog.showToast('需要大会员');
+            }
+            widget.onChangeEpisode(item);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+            child: Column(
+              spacing: 3,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        maxLines: hasLongTitle ? 1 : 2,
+                        TextSpan(
+                          children: [
+                            if (index == currentIndex)
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Image.asset(
+                                    'assets/images/live.png',
+                                    color: theme.primary,
+                                    height: 12,
+                                    semanticLabel: "正在播放：",
+                                  ),
+                                ),
+                              ),
+                            TextSpan(
+                              text: item.title ?? '第${index + 1}话',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (item.badge?.isNotEmpty == true) ...[
+                      const SizedBox(width: 2),
+                      if (item.badge == '会员')
+                        Image.asset(
+                          'assets/images/big-vip.png',
+                          height: 16,
+                          semanticLabel: "大会员",
+                        )
+                      else
+                        Text(
+                          item.badge!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: switch (item.badge) {
+                              '限免' => theme.freeColor,
+                              '预告' => theme.onSurfaceVariant,
+                              _ => theme.primary,
+                            },
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+                if (hasLongTitle)
+                  Text(
+                    isPugv ? item.title! : item.longTitle!,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: color,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

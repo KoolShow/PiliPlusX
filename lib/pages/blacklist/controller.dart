@@ -11,7 +11,6 @@ import 'package:get/get.dart';
 
 class BlackListController
     extends CommonListController<BlackListData, BlackListItem> {
-  int pageSize = 50;
   RxInt total = (-1).obs;
 
   @override
@@ -22,6 +21,7 @@ class BlackListController
 
   @override
   List<BlackListItem>? getDataList(BlackListData response) {
+    total.value = response.total ?? 0;
     return response.list;
   }
 
@@ -30,12 +30,6 @@ class BlackListController
     if (length >= total.value) {
       isEnd = true;
     }
-  }
-
-  @override
-  bool customHandleResponse(bool isRefresh, Success<BlackListData> response) {
-    total.value = response.response.total ?? 0;
-    return false;
   }
 
   void onRemove(BuildContext context, int index, name, mid) {
@@ -57,5 +51,5 @@ class BlackListController
 
   @override
   Future<LoadingState<BlackListData>> customGetData() =>
-      BlackHttp.blackList(pn: page, ps: pageSize);
+      BlackHttp.blackList(pn: page);
 }

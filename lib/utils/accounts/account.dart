@@ -1,89 +1,118 @@
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
-import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:hive/hive.dart';
 
-abstract class Account {
-  final bool isLogin = false;
-  late final DefaultCookieJar cookieJar;
-  String? accessKey;
-  String? refresh;
-  late final Set<AccountType> type;
+sealed class Account {
+  Map<String, dynamic>? toJson() => null;
 
-  final int mid = 0;
-  late String csrf;
-  final Map<String, String> headers = const {};
+  Future<void> onChange() => Future.value();
 
-  // bool activited = false;
+  Set<AccountType> get type => const {};
 
-  Future<void> delete();
-  Future<void> onChange();
+  bool get activated => false;
 
-  Map<String, dynamic>? toJson();
+  set activated(bool value) => throw UnimplementedError();
+
+  String? get accessKey => throw UnimplementedError();
+
+  DefaultCookieJar get cookieJar => throw UnimplementedError();
+
+  String get csrf => throw UnimplementedError();
+
+  Future<void> delete() => throw UnimplementedError();
+
+  Map<String, String> get headers => throw UnimplementedError();
+
+  bool get isLogin => throw UnimplementedError();
+
+  int get mid => throw UnimplementedError();
+
+  String? get refresh => throw UnimplementedError();
+
+  const Account();
 }
 
 @HiveType(typeId: 9)
-class LoginAccount implements Account {
+class LoginAccount extends Account {
   @override
   final bool isLogin = true;
   @override
   @HiveField(0)
-  late final DefaultCookieJar cookieJar;
+  final DefaultCookieJar cookieJar;
   @override
   @HiveField(1)
-  String? accessKey;
+  final String? accessKey;
   @override
   @HiveField(2)
-  String? refresh;
+  final String? refresh;
   @override
   @HiveField(3)
-  late final Set<AccountType> type;
+  final Set<AccountType> type;
+
+  @override
+  bool activated = false;
 
   @override
   late final int mid = int.parse(_midStr);
 
   @override
   late final Map<String, String> headers = {
+    ...Constants.baseHeaders,
     'x-bili-mid': _midStr,
-    'x-bili-aurora-eid': Utils.genAuroraEid(mid),
+    'x-bili-aurora-eid': IdUtils.genAuroraEid(mid),
   };
+
   @override
-  late String csrf =
+  late final String csrf =
       cookieJar.domainCookies['bilibili.com']!['/']!['bili_jct']!.cookie.value;
 
-  @override
-  Future<void> delete() => _box.delete(_midStr);
+  bool _hasDelete = false;
 
   @override
-  Future<void> onChange() => _box.put(_midStr, this);
+  Future<void> delete() {
+    assert(_hasDelete = true);
+    return _box.delete(_midStr);
+  }
+
+  @override
+  Future<void> onChange() {
+    assert(!_hasDelete);
+    return _box.put(_midStr, this);
+  }
 
   @override
   Map<String, dynamic>? toJson() => {
-        'cookies': cookieJar.toJson(),
-        'accessKey': accessKey,
-        'refresh': refresh,
-        'type': type.map((i) => i.index).toList()
-      };
+    'cookies': cookieJar.toJson(),
+    'accessKey': accessKey,
+    'refresh': refresh,
+    'type': type.map((i) => i.index).toList(),
+  };
 
   late final String _midStr = cookieJar
-      .domainCookies['bilibili.com']!['/']!['DedeUserID']!.cookie.value;
+      .domainCookies['bilibili.com']!['/']!['DedeUserID']!
+      .cookie
+      .value;
 
   late final Box<LoginAccount> _box = Accounts.account;
 
-  LoginAccount(this.cookieJar, this.accessKey, this.refresh,
-      [Set<AccountType>? type])
-      : type = type ?? {};
-
-  LoginAccount.fromJson(Map json) {
-    cookieJar = BiliCookieJar.fromJson(json['cookies']);
-    accessKey = json['accessKey'];
-    refresh = json['refresh'];
-    type = (json['type'] as Iterable?)
-            ?.map((i) => AccountType.values[i])
-            .toSet() ??
-        {};
+  LoginAccount(
+    this.cookieJar,
+    this.accessKey,
+    this.refresh, [
+    Set<AccountType>? type,
+  ]) : type = type ?? {} {
+    cookieJar.setBuvid3();
   }
+
+  factory LoginAccount.fromJson(Map json) => LoginAccount(
+    BiliCookieJar.fromJson(json['cookies']),
+    json['accessKey'],
+    json['refresh'],
+    (json['type'] as Iterable?)?.map((i) => AccountType.values[i]).toSet(),
+  );
 
   @override
   int get hashCode => mid.hashCode;
@@ -93,23 +122,26 @@ class LoginAccount implements Account {
       identical(this, other) || (other is LoginAccount && mid == other.mid);
 }
 
-class AnonymousAccount implements Account {
+class AnonymousAccount extends Account {
   @override
   final bool isLogin = false;
   @override
-  late final DefaultCookieJar cookieJar;
+  final DefaultCookieJar cookieJar = DefaultCookieJar()..setBuvid3();
   @override
-  String? accessKey;
+  final String? accessKey = null;
   @override
-  String? refresh;
+  final String? refresh = null;
   @override
-  Set<AccountType> type = {};
+  final Set<AccountType> type = {};
   @override
   final int mid = 0;
   @override
-  String csrf = '';
+  final String csrf = '';
   @override
-  final Map<String, String> headers = const {};
+  final Map<String, String> headers = Constants.baseHeaders;
+
+  @override
+  bool activated = false;
 
   @override
   Future<void> delete() async {
@@ -117,17 +149,9 @@ class AnonymousAccount implements Account {
     cookieJar.setBuvid3();
   }
 
-  @override
-  Future<void> onChange() async {}
-
-  @override
-  Map<String, dynamic>? toJson() => null;
-
   static final _instance = AnonymousAccount._();
 
-  AnonymousAccount._() {
-    cookieJar = DefaultCookieJar(ignoreExpires: true)..setBuvid3();
-  }
+  AnonymousAccount._();
 
   factory AnonymousAccount() => _instance;
 
@@ -156,16 +180,17 @@ extension BiliCookieJar on DefaultCookieJar {
   }
 
   List<Cookie> toList() =>
-      domainCookies['bilibili.com']?['/']
-          ?.entries
+      domainCookies['bilibili.com']?['/']?.entries
           .map((i) => i.value.cookie)
           .toList() ??
       [];
 
   void setBuvid3() {
-    domainCookies['bilibili.com'] ??= {'/': {}};
-    domainCookies['bilibili.com']!['/']!['buvid3'] ??= SerializableCookie(
-        Cookie('buvid3', Utils.genBuvid3())..setBiliDomain());
+    (domainCookies['bilibili.com'] ??= {
+      '/': {},
+    })['/']!['buvid3'] ??= SerializableCookie(
+      Cookie('buvid3', IdUtils.genBuvid3())..setBiliDomain(),
+    );
   }
 
   static DefaultCookieJar fromJson(Map json) =>
@@ -173,7 +198,9 @@ extension BiliCookieJar on DefaultCookieJar {
         ..domainCookies['bilibili.com'] = {
           '/': {
             for (var i in json.entries)
-              i.key: SerializableCookie(Cookie(i.key, i.value)..setBiliDomain())
+              i.key: SerializableCookie(
+                Cookie(i.key, i.value)..setBiliDomain(),
+              ),
           },
         };
 
@@ -183,7 +210,12 @@ extension BiliCookieJar on DefaultCookieJar {
           '/': {
             for (var i in cookies)
               i['name']!: SerializableCookie(
-                  Cookie(i['name']!, i['value']!)..setBiliDomain()),
+                Cookie(i['name']!, i['value']!)..setBiliDomain(),
+              ),
           },
         };
+}
+
+final class NoAccount extends Account {
+  const NoAccount();
 }

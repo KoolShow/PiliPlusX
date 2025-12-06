@@ -1,18 +1,15 @@
 import 'dart:io';
 
-import 'package:PiliPlus/common/widgets/interactiveviewer_gallery/interactive_viewer.dart'
-    as custom;
 import 'package:PiliPlus/common/widgets/interactiveviewer_gallery/interactive_viewer_boundary.dart';
 import 'package:PiliPlus/models/common/image_preview_type.dart';
-import 'package:PiliPlus/utils/download.dart';
 import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/image_utils.dart';
+import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -29,12 +26,17 @@ import 'package:media_kit_video/media_kit_video.dart';
 /// source is hit after zooming in to disable or enable the swiping gesture of
 /// the [PageView].
 ///
-typedef IndexedFocusedWidgetBuilder = Widget Function(
-    BuildContext context, int index, bool isFocus, bool enablePageView);
+typedef IndexedFocusedWidgetBuilder =
+    Widget Function(
+      BuildContext context,
+      int index,
+      bool isFocus,
+      bool enablePageView,
+    );
 
 typedef IndexedTagStringBuilder = String Function(int index);
 
-class InteractiveviewerGallery<T> extends StatefulWidget {
+class InteractiveviewerGallery extends StatefulWidget {
   const InteractiveviewerGallery({
     super.key,
     required this.sources,
@@ -42,18 +44,11 @@ class InteractiveviewerGallery<T> extends StatefulWidget {
     this.itemBuilder,
     this.maxScale = 8,
     this.minScale = 1.0,
-    this.onPageChanged,
-    this.onDismissed,
-    this.setStatusBar,
-    this.onClose,
     required this.quality,
+    this.onClose,
   });
 
   final int quality;
-
-  final ValueChanged? onClose;
-
-  final bool? setStatusBar;
 
   /// The sources to show.
   final List<SourceModel> sources;
@@ -68,9 +63,7 @@ class InteractiveviewerGallery<T> extends StatefulWidget {
 
   final double minScale;
 
-  final ValueChanged<int>? onPageChanged;
-
-  final ValueChanged<int>? onDismissed;
+  final VoidCallback? onClose;
 
   @override
   State<InteractiveviewerGallery> createState() =>
@@ -79,8 +72,8 @@ class InteractiveviewerGallery<T> extends StatefulWidget {
 
 class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
     with SingleTickerProviderStateMixin {
-  PageController? _pageController;
-  custom.TransformationController? _transformationController;
+  late final PageController _pageController;
+  late final TransformationController _transformationController;
 
   /// The controller to animate the transformation value of the
   /// [InteractiveViewer] when it should reset.
@@ -95,7 +88,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
 
   late final RxInt currentIndex = widget.initIndex.obs;
 
-  late final int _quality = GStorage.previewQ;
+  late final int _quality = Pref.previewQ;
 
   @override
   void initState() {
@@ -103,56 +96,32 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
 
     _pageController = PageController(initialPage: widget.initIndex);
 
-    _transformationController = custom.TransformationController();
+    _transformationController = TransformationController();
 
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     )..addListener(listener);
 
-    if (widget.setStatusBar != false) {
-      setStatusBar();
-    }
-
-    var item = widget.sources[currentIndex.value];
+    final item = widget.sources[currentIndex.value];
     if (item.sourceType == SourceType.livePhoto) {
       _onPlay(item.liveUrl!);
     }
   }
 
   void listener() {
-    _transformationController!.value = _animation?.value ?? Matrix4.identity();
-  }
-
-  SystemUiMode? mode;
-  Future<void> setStatusBar() async {
-    if (Platform.isIOS || Platform.isAndroid) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.immersiveSticky,
-      );
-    }
-    if (Platform.isAndroid &&
-        (await DeviceInfoPlugin().androidInfo).version.sdkInt < 29) {
-      mode = SystemUiMode.manual;
-    }
+    _transformationController.value = _animation?.value ?? Matrix4.identity();
   }
 
   @override
   void dispose() {
-    widget.onClose?.call(true);
+    widget.onClose?.call();
     _player?.dispose();
-    _pageController?.dispose();
+    _pageController.dispose();
     _animationController
       ..removeListener(listener)
       ..dispose();
-    if (widget.setStatusBar != false) {
-      if (Platform.isIOS || Platform.isAndroid) {
-        SystemChrome.setEnabledSystemUIMode(
-          mode ?? SystemUiMode.edgeToEdge,
-          overlays: SystemUiOverlay.values,
-        );
-      }
-    }
+    _transformationController.dispose();
     for (var item in widget.sources) {
       if (item.sourceType == SourceType.networkImage) {
         CachedNetworkImageProvider(_getActualUrl(item.url)).evict();
@@ -186,7 +155,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
   /// When the left boundary has been hit after scaling up the source, the page
   /// view swiping gets enabled if it has a page to swipe to.
   void _onLeftBoundaryHit() {
-    if (!_enablePageView && _pageController!.page!.floor() > 0) {
+    if (!_enablePageView && _pageController.page!.floor() > 0) {
       setState(() {
         _enablePageView = true;
       });
@@ -197,7 +166,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
   /// view swiping gets enabled if it has a page to swipe to.
   void _onRightBoundaryHit() {
     if (!_enablePageView &&
-        _pageController!.page!.floor() < widget.sources.length - 1) {
+        _pageController.page!.floor() < widget.sources.length - 1) {
       setState(() {
         _enablePageView = true;
       });
@@ -231,16 +200,16 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
     if (item.sourceType == SourceType.livePhoto) {
       _onPlay(item.liveUrl!);
     }
-    widget.onPageChanged?.call(page);
-    if (_transformationController!.value != Matrix4.identity()) {
+    if (_transformationController.value != Matrix4.identity()) {
       // animate the reset for the transformation of the interactive viewer
 
-      _animation = Matrix4Tween(
-        begin: _transformationController!.value,
-        end: Matrix4.identity(),
-      ).animate(
-        CurveTween(curve: Curves.easeOut).animate(_animationController),
-      );
+      _animation =
+          Matrix4Tween(
+            begin: _transformationController.value,
+            end: Matrix4.identity(),
+          ).animate(
+            CurveTween(curve: Curves.easeOut).animate(_animationController),
+          );
 
       _animationController.forward(from: 0);
     }
@@ -248,17 +217,8 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
 
   String _getActualUrl(String url) {
     return _quality != 100
-        ? Utils.thumbnailImgUrl(url, _quality)
+        ? ImageUtils.thumbnailUrl(url, _quality)
         : url.http2https;
-  }
-
-  void onClose() {
-    if (widget.onClose != null) {
-      widget.onClose!(false);
-    } else {
-      Get.back();
-      widget.onDismissed?.call(_pageController!.page!.floor());
-    }
   }
 
   Player? _player;
@@ -271,14 +231,14 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
       children: [
         InteractiveViewerBoundary(
           controller: _transformationController,
-          boundaryWidth: MediaQuery.sizeOf(context).width,
+          boundaryWidth: MediaQuery.widthOf(context),
           onScaleChanged: _onScaleChanged,
           onLeftBoundaryHit: _onLeftBoundaryHit,
           onRightBoundaryHit: _onRightBoundaryHit,
           onNoBoundaryHit: _onNoBoundaryHit,
           maxScale: widget.maxScale,
           minScale: widget.minScale,
-          onDismissed: onClose,
+          onDismissed: Get.back,
           onReset: () {
             if (!_enablePageView) {
               setState(() {
@@ -289,23 +249,32 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
           child: PageView.builder(
             onPageChanged: _onPageChanged,
             controller: _pageController,
-            physics:
-                _enablePageView ? null : const NeverScrollableScrollPhysics(),
+            physics: _enablePageView
+                ? null
+                : const NeverScrollableScrollPhysics(),
             itemCount: widget.sources.length,
             itemBuilder: (BuildContext context, int index) {
               final item = widget.sources[index];
+              final isFileImg = item.sourceType == SourceType.fileImage;
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => EasyThrottle.throttle(
-                    'preview', const Duration(milliseconds: 555), onClose),
+                  'preview',
+                  const Duration(milliseconds: 555),
+                  Get.back,
+                ),
                 onDoubleTapDown: (TapDownDetails details) {
                   _doubleTapLocalPosition = details.localPosition;
                 },
                 onDoubleTap: () => EasyThrottle.throttle(
-                    'preview', const Duration(milliseconds: 555), onDoubleTap),
-                onLongPress: item.sourceType == SourceType.fileImage
-                    ? null
-                    : () => onLongPress(item),
+                  'preview',
+                  const Duration(milliseconds: 555),
+                  onDoubleTap,
+                ),
+                onLongPress: !isFileImg ? () => onLongPress(item) : null,
+                onSecondaryTap: !isFileImg && !Utils.isMobile
+                    ? () => onLongPress(item)
+                    : null,
                 child: widget.itemBuilder != null
                     ? widget.itemBuilder!(
                         context,
@@ -323,7 +292,8 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
           left: 0,
           right: 0,
           child: Container(
-            padding: MediaQuery.paddingOf(context) +
+            padding:
+                MediaQuery.viewPaddingOf(context) +
                 const EdgeInsets.fromLTRB(12, 8, 20, 8),
             decoration: _enablePageView
                 ? BoxDecoration(
@@ -332,82 +302,17 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withValues(alpha: 0.3)
+                        Colors.black.withValues(alpha: 0.3),
                       ],
                     ),
                   )
                 : null,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: onClose,
-                  ),
-                ),
-                if (widget.sources.length > 1)
-                  Align(
-                    alignment: Alignment.center,
-                    child: Obx(
-                      () => Text(
-                        "${currentIndex.value + 1}/${widget.sources.length}",
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                if (widget.sources[currentIndex.value].sourceType !=
-                    SourceType.fileImage)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: PopupMenuButton(
-                      itemBuilder: (context) {
-                        final item = widget.sources[currentIndex.value];
-                        return [
-                          PopupMenuItem(
-                            onTap: () => DownloadUtils.onShareImg(item.url),
-                            child: const Text("分享图片"),
-                          ),
-                          PopupMenuItem(
-                            onTap: () => Utils.copyText(item.url),
-                            child: const Text("复制链接"),
-                          ),
-                          PopupMenuItem(
-                            onTap: () => DownloadUtils.downloadImg(
-                              this.context,
-                              [item.url],
-                            ),
-                            child: const Text("保存图片"),
-                          ),
-                          if (widget.sources.length > 1)
-                            PopupMenuItem(
-                              onTap: () => DownloadUtils.downloadImg(
-                                this.context,
-                                widget.sources.map((item) => item.url).toList(),
-                              ),
-                              child: const Text("保存全部"),
-                            ),
-                          if (item.sourceType == SourceType.livePhoto)
-                            PopupMenuItem(
-                              onTap: () {
-                                DownloadUtils.downloadLivePhoto(
-                                  context: this.context,
-                                  url: item.url,
-                                  liveUrl: item.liveUrl!,
-                                  width: item.width!,
-                                  height: item.height!,
-                                );
-                              },
-                              child: const Text("保存 Live Photo"),
-                            ),
-                        ];
-                      },
-                      child: const Icon(Icons.more_horiz, color: Colors.white),
-                    ),
-                  ),
-              ],
+            alignment: Alignment.center,
+            child: Obx(
+              () => Text(
+                "${currentIndex.value + 1}/${widget.sources.length}",
+                style: const TextStyle(color: Colors.white),
+              ),
             ),
           ),
         ),
@@ -421,38 +326,40 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
         tag: item.url,
         child: switch (item.sourceType) {
           SourceType.fileImage => Image(
-              filterQuality: FilterQuality.low,
-              image: FileImage(File(item.url)),
-            ),
+            filterQuality: FilterQuality.low,
+            image: FileImage(File(item.url)),
+          ),
           SourceType.networkImage => CachedNetworkImage(
-              fadeInDuration: Duration.zero,
-              fadeOutDuration: Duration.zero,
-              imageUrl: _getActualUrl(item.url),
-              placeholderFadeInDuration: Duration.zero,
-              placeholder: (context, url) {
-                return CachedNetworkImage(
-                  fadeInDuration: Duration.zero,
-                  fadeOutDuration: Duration.zero,
-                  imageUrl: Utils.thumbnailImgUrl(item.url, widget.quality),
-                );
-              },
-            ),
-          SourceType.livePhoto => Obx(() => currentIndex.value == index
-              ? IgnorePointer(
-                  child: Video(
-                    controller: _videoController!,
-                    fill: Colors.transparent,
-                  ),
-                )
-              : const SizedBox.shrink()),
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            imageUrl: _getActualUrl(item.url),
+            placeholderFadeInDuration: Duration.zero,
+            placeholder: (context, url) {
+              return CachedNetworkImage(
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
+                imageUrl: ImageUtils.thumbnailUrl(item.url, widget.quality),
+              );
+            },
+          ),
+          SourceType.livePhoto => Obx(
+            () => currentIndex.value == index
+                ? IgnorePointer(
+                    child: Video(
+                      controller: _videoController!,
+                      fill: Colors.transparent,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         },
       ),
     );
   }
 
   void onDoubleTap() {
-    Matrix4 matrix = _transformationController!.value.clone();
-    double currentScale = matrix.row0.x;
+    Matrix4 matrix = _transformationController.value.clone();
+    double currentScale = matrix.storage[0];
 
     double targetScale = widget.minScale;
 
@@ -483,15 +390,16 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
       offSetX,
       offSetY,
       matrix.row2.w,
-      matrix.row3.w
+      matrix.row3.w,
     ]);
 
-    _animation = Matrix4Tween(
-      begin: _transformationController!.value,
-      end: matrix,
-    ).animate(
-      CurveTween(curve: Curves.easeOut).animate(_animationController),
-    );
+    _animation =
+        Matrix4Tween(
+          begin: _transformationController.value,
+          end: matrix,
+        ).animate(
+          CurveTween(curve: Curves.easeOut).animate(_animationController),
+        );
     _animationController
         .forward(from: 0)
         .whenComplete(() => _onScaleChanged(targetScale));
@@ -507,14 +415,15 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                onTap: () {
-                  Get.back();
-                  DownloadUtils.onShareImg(item.url);
-                },
-                dense: true,
-                title: const Text('分享', style: TextStyle(fontSize: 14)),
-              ),
+              if (Utils.isMobile)
+                ListTile(
+                  onTap: () {
+                    Get.back();
+                    ImageUtils.onShareImg(item.url);
+                  },
+                  dense: true,
+                  title: const Text('分享', style: TextStyle(fontSize: 14)),
+                ),
               ListTile(
                 onTap: () {
                   Get.back();
@@ -526,7 +435,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
               ListTile(
                 onTap: () {
                   Get.back();
-                  DownloadUtils.downloadImg(
+                  ImageUtils.downloadImg(
                     this.context,
                     [item.url],
                   );
@@ -534,11 +443,20 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
                 dense: true,
                 title: const Text('保存图片', style: TextStyle(fontSize: 14)),
               ),
-              if (widget.sources.length > 1)
+              if (Utils.isDesktop)
                 ListTile(
                   onTap: () {
                     Get.back();
-                    DownloadUtils.downloadImg(
+                    PageUtils.launchURL(item.url);
+                  },
+                  dense: true,
+                  title: const Text('网页打开', style: TextStyle(fontSize: 14)),
+                )
+              else if (widget.sources.length > 1)
+                ListTile(
+                  onTap: () {
+                    Get.back();
+                    ImageUtils.downloadImg(
                       this.context,
                       widget.sources.map((item) => item.url).toList(),
                     );
@@ -550,7 +468,7 @@ class _InteractiveviewerGalleryState extends State<InteractiveviewerGallery>
                 ListTile(
                   onTap: () {
                     Get.back();
-                    DownloadUtils.downloadLivePhoto(
+                    ImageUtils.downloadLivePhoto(
                       context: this.context,
                       url: item.url,
                       liveUrl: item.liveUrl!,

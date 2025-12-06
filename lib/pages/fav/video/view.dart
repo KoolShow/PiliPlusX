@@ -1,7 +1,5 @@
-import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/common/skeleton/video_card_h.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/pages/fav/video/controller.dart';
@@ -19,7 +17,7 @@ class FavVideoPage extends StatefulWidget {
 }
 
 class _FavVideoPageState extends State<FavVideoPage>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, GridMixin {
   final FavController _favController = Get.find<FavController>();
 
   @override
@@ -36,8 +34,8 @@ class _FavVideoPageState extends State<FavVideoPage>
         slivers: [
           SliverPadding(
             padding: EdgeInsets.only(
-              top: StyleString.safeSpace - 5,
-              bottom: 80 + MediaQuery.paddingOf(context).bottom,
+              top: 7,
+              bottom: 100 + MediaQuery.viewPaddingOf(context).bottom,
             ),
             sliver: Obx(
               () => _buildBody(_favController.loadingState.value),
@@ -50,21 +48,12 @@ class _FavVideoPageState extends State<FavVideoPage>
 
   Widget _buildBody(LoadingState<List<FavFolderInfo>?> loadingState) {
     return switch (loadingState) {
-      Loading() => SliverGrid(
-          gridDelegate: Grid.videoCardHDelegate(context),
-          delegate: SliverChildBuilderDelegate(
-            (BuildContext context, int index) {
-              return const VideoCardHSkeleton();
-            },
-            childCount: 10,
-          ),
-        ),
-      Success(:var response) => response?.isNotEmpty == true
-          ? SliverGrid(
-              gridDelegate: Grid.videoCardHDelegate(context),
-              delegate: SliverChildBuilderDelegate(
-                childCount: response!.length,
-                (BuildContext context, int index) {
+      Loading() => gridSkeleton,
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? SliverGrid.builder(
+                gridDelegate: gridDelegate,
+                itemBuilder: (BuildContext context, int index) {
                   if (index == response.length - 1) {
                     _favController.onLoadMore();
                   }
@@ -90,15 +79,13 @@ class _FavVideoPageState extends State<FavVideoPage>
                     },
                   );
                 },
-              ),
-            )
-          : HttpError(
-              onReload: _favController.onReload,
-            ),
+                itemCount: response.length,
+              )
+            : HttpError(onReload: _favController.onReload),
       Error(:var errMsg) => HttpError(
-          errMsg: errMsg,
-          onReload: _favController.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _favController.onReload,
+      ),
     };
   }
 }

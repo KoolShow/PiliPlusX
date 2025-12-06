@@ -7,15 +7,16 @@ import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
-import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_rec_video_item.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 // 视频卡片 - 垂直布局
 class VideoCardV extends StatelessWidget {
@@ -27,11 +28,6 @@ class VideoCardV extends StatelessWidget {
     required this.videoItem,
     this.onRemove,
   });
-
-  bool isStringNumeric(String str) {
-    RegExp numericRegex = RegExp(r'^\d+$');
-    return numericRegex.hasMatch(str);
-  }
 
   Future<void> onPushDetail(String heroTag) async {
     String? goto = videoItem.goto;
@@ -45,42 +41,18 @@ class VideoCardV extends StatelessWidget {
             await SearchHttp.ab2c(aid: videoItem.aid, bvid: bvid);
         if (cid != null) {
           PageUtils.toVideoPage(
-            'bvid=$bvid&cid=$cid',
-            arguments: {
-              'pic': videoItem.cover,
-              'heroTag': heroTag,
-            },
+            aid: videoItem.aid,
+            bvid: bvid,
+            cid: cid,
+            cover: videoItem.cover,
+            title: videoItem.title,
           );
         }
         break;
       // 动态
       case 'picture':
         try {
-          String type = 'picture';
-          String uri = videoItem.uri!;
-          String id = '';
-          if (uri.startsWith('bilibili://article/')) {
-            type = 'read';
-            RegExp regex = RegExp(r'\d+');
-            Match match = regex.firstMatch(uri)!;
-            String matchedNumber = match.group(0)!;
-            videoItem.param = int.parse(matchedNumber);
-            id = '${videoItem.param}';
-          }
-          if (uri.startsWith('http')) {
-            String id = Uri.parse(uri).path.split('/')[1];
-            if (isStringNumeric(id)) {
-              PageUtils.pushDynFromId(id: id);
-              return;
-            }
-          }
-          Get.toNamed(
-            '/articlePage',
-            parameters: {
-              'id': id,
-              'type': type,
-            },
-          );
+          PiliScheme.routePushFromUrl(videoItem.uri!);
         } catch (err) {
           SmartDialog.showToast(err.toString());
         }
@@ -94,30 +66,29 @@ class VideoCardV extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void onLongPress() => imageSaveDialog(
+          title: videoItem.title,
+          cover: videoItem.cover,
+          bvid: videoItem.bvid,
+        );
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Semantics(
-          label: Utils.videoItemSemantics(videoItem),
-          excludeSemantics: true,
-          child: Card(
-            color: Colors.transparent,
-            elevation: 0,
-            clipBehavior: Clip.hardEdge,
-            margin: EdgeInsets.zero,
-            child: InkWell(
-              onTap: () => onPushDetail(Utils.makeHeroTag(videoItem.aid)),
-              onLongPress: () => imageSaveDialog(
-                title: videoItem.title,
-                cover: videoItem.cover,
-                bvid: videoItem.bvid,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AspectRatio(
-                    aspectRatio: StyleString.aspectRatio,
-                    child: LayoutBuilder(builder: (context, boxConstraints) {
+        Card(
+          color: Colors.transparent,
+          elevation: 0,
+          clipBehavior: Clip.hardEdge,
+          child: InkWell(
+            onTap: () => onPushDetail(Utils.makeHeroTag(videoItem.aid)),
+            onLongPress: onLongPress,
+            onSecondaryTap: Utils.isMobile ? null : onLongPress,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: StyleString.aspectRatio,
+                  child: LayoutBuilder(
+                    builder: (context, boxConstraints) {
                       double maxWidth = boxConstraints.maxWidth;
                       double maxHeight = boxConstraints.maxHeight;
                       return Stack(
@@ -127,6 +98,7 @@ class VideoCardV extends StatelessWidget {
                             src: videoItem.cover,
                             width: maxWidth,
                             height: maxHeight,
+                            radius: 0,
                           ),
                           if (videoItem.duration > 0)
                             PBadge(
@@ -134,15 +106,17 @@ class VideoCardV extends StatelessWidget {
                               right: 7,
                               size: PBadgeSize.small,
                               type: PBadgeType.gray,
-                              text: Utils.timeFormat(videoItem.duration),
-                            )
+                              text: DurationUtils.formatDuration(
+                                videoItem.duration,
+                              ),
+                            ),
                         ],
                       );
-                    }),
+                    },
                   ),
-                  content(context)
-                ],
-              ),
+                ),
+                content(context),
+              ],
             ),
           ),
         ),
@@ -219,6 +193,7 @@ class VideoCardV extends StatelessWidget {
                     videoItem.owner.name.toString(),
                     maxLines: 1,
                     overflow: TextOverflow.clip,
+                    semanticsLabel: 'UP：${videoItem.owner.name}',
                     style: TextStyle(
                       height: 1.5,
                       fontSize: theme.textTheme.labelMedium!.fontSize,
@@ -226,7 +201,7 @@ class VideoCardV extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (videoItem.goto == 'av') const SizedBox(width: 10)
+                if (videoItem.goto == 'av') const SizedBox(width: 10),
               ],
             ),
           ],
@@ -234,6 +209,9 @@ class VideoCardV extends StatelessWidget {
       ),
     );
   }
+
+  static final shortFormat = DateFormat('M-d');
+  static final longFormat = DateFormat('yy-M-d');
 
   Widget videoStat(BuildContext context, ThemeData theme) {
     return Row(
@@ -254,29 +232,36 @@ class VideoCardV extends StatelessWidget {
           Text.rich(
             maxLines: 1,
             TextSpan(
-                style: TextStyle(
-                  fontSize: theme.textTheme.labelSmall!.fontSize,
-                  color: theme.colorScheme.outline.withValues(alpha: 0.8),
-                ),
-                text: Utils.formatTimestampToRelativeTime(videoItem.pubdate)),
+              style: TextStyle(
+                fontSize: theme.textTheme.labelSmall!.fontSize,
+                color: theme.colorScheme.outline.withValues(alpha: 0.8),
+              ),
+              text: DateFormatUtils.dateFormat(
+                videoItem.pubdate,
+                short: shortFormat,
+                long: longFormat,
+              ),
+            ),
           ),
           const SizedBox(width: 2),
-        ] else if (videoItem is RecVideoItemAppModel &&
-            videoItem.desc != null &&
-            videoItem.desc!.contains(' · ')) ...[
-          const Spacer(),
-          Text.rich(
-            maxLines: 1,
-            TextSpan(
-                style: TextStyle(
-                  fontSize: theme.textTheme.labelSmall!.fontSize,
-                  color: theme.colorScheme.outline.withValues(alpha: 0.8),
-                ),
-                text: Utils.shortenChineseDateString(
-                    videoItem.desc!.split(' · ').last)),
-          ),
-          const SizedBox(width: 2),
-        ]
+        ],
+        // deprecated
+        //  else if (videoItem is RecVideoItemAppModel &&
+        //     videoItem.desc != null &&
+        //     videoItem.desc!.contains(' · ')) ...[
+        //   const Spacer(),
+        //   Text.rich(
+        //     maxLines: 1,
+        //     TextSpan(
+        //         style: TextStyle(
+        //           fontSize: theme.textTheme.labelSmall!.fontSize,
+        //           color: theme.colorScheme.outline.withValues(alpha: 0.8),
+        //         ),
+        //         text: Utils.shortenChineseDateString(
+        //             videoItem.desc!.split(' · ').last)),
+        //   ),
+        //   const SizedBox(width: 2),
+        // ]
       ],
     );
   }

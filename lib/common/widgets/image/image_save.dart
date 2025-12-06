@@ -2,7 +2,8 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/http/user.dart';
-import 'package:PiliPlus/utils/download.dart';
+import 'package:PiliPlus/utils/image_utils.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -18,20 +19,17 @@ void imageSaveDialog({
     animationType: SmartAnimationType.centerScale_otherSlide,
     builder: (context) {
       final theme = Theme.of(context);
-      late final iconColor = theme.colorScheme.onSurfaceVariant;
 
       Widget iconBtn({
         String? tooltip,
-        required IconData icon,
+        required Icon icon,
         required VoidCallback? onPressed,
       }) {
         return iconButton(
-          context: context,
-          onPressed: onPressed,
-          iconSize: 20,
           icon: icon,
-          bgColor: Colors.transparent,
-          iconColor: iconColor,
+          iconSize: 20,
+          tooltip: tooltip,
+          onPressed: onPressed,
         );
       }
 
@@ -60,16 +58,16 @@ void imageSaveDialog({
                 Positioned(
                   right: 8,
                   top: 8,
-                  child: Container(
+                  child: SizedBox(
                     width: 30,
                     height: 30,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      shape: BoxShape.circle,
-                    ),
                     child: IconButton(
+                      tooltip: '关闭',
                       style: ButtonStyle(
-                        padding: WidgetStateProperty.all(EdgeInsets.zero),
+                        backgroundColor: WidgetStatePropertyAll(
+                          Colors.black.withValues(alpha: 0.3),
+                        ),
+                        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
                       ),
                       onPressed: SmartDialog.dismiss,
                       icon: const Icon(
@@ -104,29 +102,30 @@ void imageSaveDialog({
                           (res) => SmartDialog.showToast(res['msg']),
                         ),
                       },
-                      icon: Icons.watch_later_outlined,
+                      icon: const Icon(Icons.watch_later_outlined),
                     ),
-                  if (cover?.isNotEmpty == true) ...[
-                    iconBtn(
-                      tooltip: '分享',
-                      onPressed: () {
-                        SmartDialog.dismiss();
-                        DownloadUtils.onShareImg(cover!);
-                      },
-                      icon: Icons.share,
-                    ),
+                  if (cover != null && cover.isNotEmpty) ...[
+                    if (Utils.isMobile)
+                      iconBtn(
+                        tooltip: '分享',
+                        onPressed: () {
+                          SmartDialog.dismiss();
+                          ImageUtils.onShareImg(cover);
+                        },
+                        icon: const Icon(Icons.share),
+                      ),
                     iconBtn(
                       tooltip: '保存封面图',
                       onPressed: () async {
-                        bool saveStatus = await DownloadUtils.downloadImg(
+                        bool saveStatus = await ImageUtils.downloadImg(
                           context,
-                          [cover!],
+                          [cover],
                         );
                         if (saveStatus) {
                           SmartDialog.dismiss();
                         }
                       },
-                      icon: Icons.download,
+                      icon: const Icon(Icons.download),
                     ),
                   ],
                 ],

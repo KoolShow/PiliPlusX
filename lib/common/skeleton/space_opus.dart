@@ -11,7 +11,6 @@ class SpaceOpusSkeleton extends StatelessWidget {
     return Skeleton(
       child: Card(
         clipBehavior: Clip.hardEdge,
-        margin: EdgeInsets.zero,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(6)),
         ),
@@ -21,7 +20,8 @@ class SpaceOpusSkeleton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  height: (0.68 + 0.82 * Utils.random.nextDouble()) *
+                  height:
+                      (0.68 + 0.82 * Utils.random.nextDouble()) *
                       constraints.maxWidth,
                   color: surface,
                 ),
@@ -34,8 +34,11 @@ class SpaceOpusSkeleton extends StatelessWidget {
                 Container(
                   height: 10,
                   color: surface,
-                  margin:
-                      const EdgeInsets.only(left: 10, right: 10, bottom: 10),
+                  margin: const EdgeInsets.only(
+                    left: 10,
+                    right: 10,
+                    bottom: 10,
+                  ),
                   width: constraints.maxWidth,
                 ),
               ],

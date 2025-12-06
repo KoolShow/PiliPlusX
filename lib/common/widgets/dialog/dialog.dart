@@ -1,41 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-void showConfirmDialog({
+Future<bool> showConfirmDialog({
   required BuildContext context,
   required String title,
-  dynamic content,
-  required VoidCallback onConfirm,
-}) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: Text(title),
-        content: content is String
-            ? Text(content)
-            : content is Widget
+  Object? content,
+  // @Deprecated('use `bool result = await showConfirmDialog()` instead')
+  VoidCallback? onConfirm,
+}) async {
+  assert(content is String? || content is Widget);
+  return await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(title),
+            content: content is String
+                ? Text(content)
+                : content is Widget
                 ? content
                 : null,
-        actions: [
-          TextButton(
-            onPressed: Get.back,
-            child: Text(
-              '取消',
-              style: TextStyle(color: Theme.of(context).colorScheme.outline),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Get.back();
-              onConfirm();
-            },
-            child: const Text('确认'),
-          ),
-        ],
-      );
-    },
-  );
+            actions: [
+              TextButton(
+                onPressed: Get.back,
+                child: Text(
+                  '取消',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Get.back(result: true);
+                  onConfirm?.call();
+                },
+                child: const Text('确认'),
+              ),
+            ],
+          );
+        },
+      ) ??
+      false;
 }
 
 void showPgcFollowDialog({
@@ -99,7 +104,7 @@ void showPgcFollowDialog({
               Get.back();
               onUpdateStatus(-1);
             },
-          )
+          ),
         ],
       ),
     ),

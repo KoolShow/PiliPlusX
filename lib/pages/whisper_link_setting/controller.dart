@@ -10,9 +10,8 @@ import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models_new/msg/im_user_infos/datum.dart';
 import 'package:PiliPlus/models_new/msg/msg_dnd/uid_setting.dart';
 import 'package:PiliPlus/models_new/msg/session_ss/data.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:fixnum/fixnum.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
@@ -23,8 +22,9 @@ class WhisperLinkSettingController extends GetxController {
 
   final int talkerUid;
   RxBool isPinned = false.obs;
-  late final sessionId =
-      SessionId(privateId: PrivateId(talkerUid: Int64(talkerUid)));
+  late final sessionId = SessionId(
+    privateId: PrivateId(talkerUid: Int64(talkerUid)),
+  );
 
   @override
   void onInit() {
@@ -43,7 +43,7 @@ class WhisperLinkSettingController extends GetxController {
       LoadingState<List<UidSetting>?>.loading().obs;
 
   Future<void> getUserInfo() async {
-    userState.value = await MsgHttp.imUserInfos(uids: [talkerUid]);
+    userState.value = await MsgHttp.imUserInfos(uids: talkerUid.toString());
   }
 
   Future<void> getSessionSs() async {
@@ -127,7 +127,6 @@ class WhisperLinkSettingController extends GetxController {
         sessionSs
           ..value.data.followStatus = null
           ..refresh();
-        GStorage.removeBlackMid(talkerUid);
       } else {
         SmartDialog.showToast(res['msg']);
       }
@@ -146,7 +145,6 @@ class WhisperLinkSettingController extends GetxController {
             sessionSs
               ..value.data.followStatus = 128
               ..refresh();
-            GStorage.setBlackMid(talkerUid);
           } else {
             SmartDialog.showToast(res['msg']);
           }
@@ -155,20 +153,9 @@ class WhisperLinkSettingController extends GetxController {
     }
   }
 
-  void report() {
-    showDialog(
-      context: Get.context!,
-      builder: (context) => AlertDialog(
-        clipBehavior: Clip.hardEdge,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 16,
-        ),
-        content: MemberReportPanel(
-          name: userState.value.dataOrNull?.firstOrNull?.name ?? '',
-          mid: talkerUid,
-        ),
-      ),
-    );
-  }
+  void report() => showMemberReportDialog(
+    Get.context!,
+    name: userState.value.dataOrNull?.firstOrNull?.name,
+    mid: talkerUid,
+  );
 }

@@ -21,9 +21,8 @@ class _SpaceSettingPageState extends State<SpaceSettingPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('空间设置'),
-      ),
+      resizeToAvoidBottomInset: false,
+      appBar: AppBar(title: const Text('空间设置')),
       body: Obx(() => _buildBody(theme, _controller.loadingState.value)),
     );
   }
@@ -37,63 +36,62 @@ class _SpaceSettingPageState extends State<SpaceSettingPage> {
   Widget _buildBody(ThemeData theme, LoadingState<Privacy?> loadingState) {
     return switch (loadingState) {
       Loading() => const SizedBox.shrink(),
-      Success<Privacy?>(:var response) => response == null
-          ? scrollErrorWidget(onReload: _controller.onReload)
-          : Builder(
-              builder: (context) {
-                final padding = MediaQuery.paddingOf(context);
-                final divider = Divider(
-                  height: 1,
-                  indent: max(16, padding.left),
-                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                );
-                final dividerL = SliverToBoxAdapter(
-                  child: Divider(
-                    height: 12,
-                    thickness: 12,
+      Success<Privacy?>(:var response) =>
+        response == null
+            ? scrollErrorWidget(onReload: _controller.onReload)
+            : Builder(
+                builder: (context) {
+                  final padding = MediaQuery.viewPaddingOf(context);
+                  final divider = Divider(
+                    height: 1,
+                    indent: max(16, padding.left),
                     color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                  ),
-                );
-                return CustomScrollView(
-                  slivers: [
-                    dividerL,
-                    SliverList.separated(
-                      itemCount: response.list1.length,
-                      itemBuilder: (context, index) {
-                        return _item(response.list1[index]);
-                      },
-                      separatorBuilder: (context, index) => divider,
+                  );
+                  final dividerL = SliverToBoxAdapter(
+                    child: Divider(
+                      height: 12,
+                      thickness: 12,
+                      color: theme.colorScheme.outline.withValues(alpha: 0.1),
                     ),
-                    dividerL,
-                    SliverList.separated(
-                      itemCount: response.list2.length,
-                      itemBuilder: (context, index) {
-                        return _item(response.list2[index]);
-                      },
-                      separatorBuilder: (context, index) => divider,
-                    ),
-                    dividerL,
-                    SliverList.separated(
-                      itemCount: response.list3.length,
-                      itemBuilder: (context, index) {
-                        return _item(response.list3[index]);
-                      },
-                      separatorBuilder: (context, index) => divider,
-                    ),
-                    dividerL,
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: padding.bottom + 80,
+                  );
+                  return CustomScrollView(
+                    slivers: [
+                      dividerL,
+                      SliverList.separated(
+                        itemCount: response.list1.length,
+                        itemBuilder: (context, index) {
+                          return _item(response.list1[index]);
+                        },
+                        separatorBuilder: (context, index) => divider,
                       ),
-                    ),
-                  ],
-                );
-              },
-            ),
+                      dividerL,
+                      SliverList.separated(
+                        itemCount: response.list2.length,
+                        itemBuilder: (context, index) {
+                          return _item(response.list2[index]);
+                        },
+                        separatorBuilder: (context, index) => divider,
+                      ),
+                      dividerL,
+                      SliverList.separated(
+                        itemCount: response.list3.length,
+                        itemBuilder: (context, index) {
+                          return _item(response.list3[index]);
+                        },
+                        separatorBuilder: (context, index) => divider,
+                      ),
+                      dividerL,
+                      SliverToBoxAdapter(
+                        child: SizedBox(height: padding.bottom + 100),
+                      ),
+                    ],
+                  );
+                },
+              ),
       Error(:var errMsg) => scrollErrorWidget(
-          errMsg: errMsg,
-          onReload: _controller.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _controller.onReload,
+      ),
     };
   }
 
@@ -106,11 +104,11 @@ class _SpaceSettingPageState extends State<SpaceSettingPage> {
           value ??= !item.boolVal;
           item.value = item.isReverse
               ? value
-                  ? 0
-                  : 1
+                    ? 0
+                    : 1
               : value
-                  ? 1
-                  : 0;
+              ? 1
+              : 0;
           (context as Element).markNeedsBuild();
         }
 
@@ -125,13 +123,6 @@ class _SpaceSettingPageState extends State<SpaceSettingPage> {
             alignment: Alignment.centerRight,
             scale: 0.8,
             child: Switch(
-              thumbIcon: WidgetStateProperty.resolveWith<Icon?>(
-                  (Set<WidgetState> states) {
-                if (states.isNotEmpty && states.first == WidgetState.selected) {
-                  return const Icon(Icons.done);
-                }
-                return null;
-              }),
               value: item.boolVal,
               onChanged: onChanged,
             ),

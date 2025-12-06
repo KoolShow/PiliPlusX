@@ -19,28 +19,29 @@ enum HomeTabType implements EnumWithLabel {
   hot('热门'),
   rank('分区'),
   bangumi('番剧'),
-  cinema('影视');
+  cinema('影视')
+  ;
 
   @override
   final String label;
   const HomeTabType(this.label);
 
   ScrollOrRefreshMixin Function() get ctr => switch (this) {
-        HomeTabType.live => Get.find<LiveController>,
-        HomeTabType.rcmd => Get.find<RcmdController>,
-        HomeTabType.hot => Get.find<HotController>,
-        HomeTabType.rank =>
-          (Get.find<RankController>) as ScrollOrRefreshMixin Function(),
-        HomeTabType.bangumi || HomeTabType.cinema => () =>
-            Get.find<PgcController>(tag: name),
-      };
+    HomeTabType.live => Get.find<LiveController>,
+    HomeTabType.rcmd => Get.find<RcmdController>,
+    HomeTabType.hot => Get.find<HotController>,
+    HomeTabType.rank =>
+      (Get.find<RankController>) as ScrollOrRefreshMixin Function(),
+    HomeTabType.bangumi ||
+    HomeTabType.cinema => () => Get.find<PgcController>(tag: name),
+  };
 
   Widget get page => switch (this) {
-        HomeTabType.live => const LivePage(),
-        HomeTabType.rcmd => const RcmdPage(),
-        HomeTabType.hot => const HotPage(),
-        HomeTabType.rank => const RankPage(),
-        HomeTabType.bangumi => const PgcPage(tabType: HomeTabType.bangumi),
-        HomeTabType.cinema => const PgcPage(tabType: HomeTabType.cinema),
-      };
+    HomeTabType.live => const LivePage(),
+    HomeTabType.rcmd => const RcmdPage(),
+    HomeTabType.hot => const HotPage(),
+    HomeTabType.rank => const RankPage(),
+    HomeTabType.bangumi => const PgcPage(tabType: HomeTabType.bangumi),
+    HomeTabType.cinema => const PgcPage(tabType: HomeTabType.cinema),
+  };
 }

@@ -3,7 +3,9 @@ import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models_new/space/space_fav/list.dart';
-import 'package:PiliPlus/models_new/sub/sub/list.dart';
+import 'package:PiliPlus/pages/subscription_detail/view.dart';
+import 'package:PiliPlus/utils/fav_utils.dart';
+import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -17,8 +19,12 @@ class MemberFavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Material(
-      color: Colors.transparent,
+      type: MaterialType.transparency,
       child: InkWell(
         onTap: () async {
           if (item.state == 1) {
@@ -26,7 +32,7 @@ class MemberFavItem extends StatelessWidget {
             return;
           }
 
-          if (item.type == 0) {
+          if (item.type == 0 || item.type == 11) {
             var res = await Get.toNamed(
               '/favDetail',
               parameters: {
@@ -36,64 +42,48 @@ class MemberFavItem extends StatelessWidget {
             );
             callback?.call(res);
           } else {
-            Get.toNamed(
-              '/subDetail',
-              arguments: SubItemModel(
-                type: item.type,
-                title: item.title,
-                cover: item.cover,
-                upper: item.upper,
-                mediaCount: item.mediaCount,
-                viewCount: item.viewCount,
-              ),
-              parameters: {
-                'id': item.id.toString(),
-                'heroTag': Utils.makeHeroTag(item.id),
-              },
+            SubDetailPage.toSubDetailPage(
+              item.id!,
+              subInfo: item,
             );
           }
         },
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-        ),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: StyleString.safeSpace,
             vertical: 5,
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AspectRatio(
-                aspectRatio: StyleString.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, boxConstraints) {
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        NetworkImgLayer(
-                          src: item.cover,
-                          width: boxConstraints.maxWidth,
-                          height: boxConstraints.maxHeight,
-                        ),
-                        if (item.type == 21)
-                          const PBadge(
-                            right: 6,
-                            top: 6,
-                            text: '合集',
-                          )
-                        else if (item.type == 11)
-                          const PBadge(
-                            right: 6,
-                            top: 6,
-                            text: '收藏夹',
-                          ),
-                      ],
-                    );
-                  },
-                ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AspectRatio(
+                    aspectRatio: StyleString.aspectRatio,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => NetworkImgLayer(
+                        src: item.cover,
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                      ),
+                    ),
+                  ),
+                  if (item.type == 21)
+                    const PBadge(
+                      right: 6,
+                      top: 6,
+                      text: '合集',
+                    )
+                  else if (item.type == 11)
+                    const PBadge(
+                      right: 6,
+                      top: 6,
+                      text: '收藏夹',
+                    ),
+                ],
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -109,12 +99,12 @@ class MemberFavItem extends StatelessWidget {
                     const Spacer(),
                     Text(
                       item.type == 0
-                          ? '${item.mediaCount}个内容 · ${Utils.isPublicFavText(item.attr)}'
+                          ? '${item.mediaCount}个内容 · ${FavUtils.isPublicFavText(item.attr)}'
                           : item.type == 11
-                              ? '${item.mediaCount}个内容 · ${item.upper?.name}'
-                              : item.type == 21
-                                  ? '创建者: ${item.upper?.name}\n${item.mediaCount}个视频 · ${Utils.numFormat(item.viewCount)}播放'
-                                  : '${item.mediaCount}个内容',
+                          ? '${item.mediaCount}个内容 · ${item.upper?.name}'
+                          : item.type == 21
+                          ? '创建者: ${item.upper?.name}\n${item.mediaCount}个视频 · ${NumUtils.numFormat(item.viewCount)}播放'
+                          : '${item.mediaCount}个内容',
                       style: TextStyle(
                         fontSize: 12,
                         color: theme.colorScheme.outline,

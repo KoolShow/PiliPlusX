@@ -10,18 +10,15 @@ class VideoCardVSkeleton extends StatelessWidget {
     final color = Theme.of(context).colorScheme.onInverseSurface;
     return Skeleton(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
             aspectRatio: StyleString.aspectRatio,
-            child: LayoutBuilder(
-              builder: (context, boxConstraints) {
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: StyleString.mdRadius,
-                  ),
-                );
-              },
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: StyleString.mdRadius,
+              ),
             ),
           ),
           Padding(

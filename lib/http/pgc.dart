@@ -8,7 +8,7 @@ import 'package:PiliPlus/models_new/pgc/pgc_index_result/list.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_review/data.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_timeline/pgc_timeline.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_timeline/result.dart';
-import 'package:PiliPlus/utils/storage.dart' show Accounts;
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:dio/dio.dart';
 
 class PgcHttp {
@@ -23,9 +23,9 @@ class PgcHttp {
       Api.pgcIndexResult,
       queryParameters: {
         ...params,
-        if (seasonType != null) 'season_type': seasonType,
-        if (type != null) 'type': type,
-        if (indexType != null) 'index_type': indexType,
+        'season_type': ?seasonType,
+        'type': ?type,
+        'index_type': ?indexType,
         'page': page,
         'pagesize': 21,
       },
@@ -45,9 +45,9 @@ class PgcHttp {
     var res = await Request().get(
       Api.pgcIndexCondition,
       queryParameters: {
-        if (seasonType != null) 'season_type': seasonType,
-        if (type != null) 'type': type,
-        if (indexType != null) 'index_type': indexType,
+        'season_type': ?seasonType,
+        'type': ?type,
+        'index_type': ?indexType,
       },
     );
     if (res.data['code'] == 0) {
@@ -62,10 +62,25 @@ class PgcHttp {
     int? indexType,
   }) async {
     var res = await Request().get(
-      Api.pgcIndex,
+      Api.pgcIndexResult,
       queryParameters: {
+        'st': 1,
+        'order': 3,
+        'season_version': -1,
+        'spoken_language_type': -1,
+        'area': -1,
+        'is_finish': -1,
+        'copyright': -1,
+        'season_status': -1,
+        'season_month': -1,
+        'year': -1,
+        'style_id': -1,
+        'sort': 0,
+        'season_type': 1,
+        'pagesize': 20,
+        'type': 1,
         'page': page,
-        if (indexType != null) 'index_type': indexType,
+        'index_type': ?indexType,
       },
     );
     if (res.data['code'] == 0) {
@@ -75,7 +90,7 @@ class PgcHttp {
     }
   }
 
-  static Future<LoadingState<List<Result>?>> pgcTimeline({
+  static Future<LoadingState<List<TimelineResult>?>> pgcTimeline({
     int types = 1, // 1：`番剧`<br />3：`电影`<br />4：`国创` |
     required int before,
     required int after,
@@ -107,7 +122,7 @@ class PgcHttp {
         'media_id': mediaId,
         'ps': 20,
         'sort': sort,
-        if (next != null) 'cursor': next,
+        'cursor': ?next,
         'web_location': 666.19,
       },
     );
@@ -223,6 +238,20 @@ class PgcHttp {
     );
     if (res.data['code'] == 0) {
       return {'status': true};
+    } else {
+      return {'status': false, 'msg': res.data['message']};
+    }
+  }
+
+  static Future seasonStatus(dynamic seasonId) async {
+    var res = await Request().get(
+      Api.seasonStatus,
+      queryParameters: {
+        'season_id': seasonId,
+      },
+    );
+    if (res.data['code'] == 0) {
+      return {'status': true, 'data': res.data['result']};
     } else {
       return {'status': false, 'msg': res.data['message']};
     }

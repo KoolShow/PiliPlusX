@@ -2,7 +2,7 @@ import 'package:PiliPlus/models_new/pgc/pgc_info_model/danmaku.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/vt.dart';
 
 class StatForUnity {
-  int? coin;
+  num? coin;
   Danmaku? danmaku;
   int? likes;
   int? reply;
@@ -11,14 +11,14 @@ class StatForUnity {
   StatForUnity({this.coin, this.danmaku, this.likes, this.reply, this.vt});
 
   factory StatForUnity.fromJson(Map<String, dynamic> json) => StatForUnity(
-        coin: json['coin'] as int?,
-        danmaku: json['danmaku'] == null
-            ? null
-            : Danmaku.fromJson(json['danmaku'] as Map<String, dynamic>),
-        likes: json['likes'] as int?,
-        reply: json['reply'] as int?,
-        vt: json['vt'] == null
-            ? null
-            : Vt.fromJson(json['vt'] as Map<String, dynamic>),
-      );
+    coin: json['coin'] as num?,
+    danmaku: json['danmaku'] == null
+        ? null
+        : Danmaku.fromJson(json['danmaku'] as Map<String, dynamic>),
+    likes: json['likes'] as int?,
+    reply: json['reply'] as int?,
+    vt: json['vt'] == null
+        ? null
+        : Vt.fromJson(json['vt'] as Map<String, dynamic>),
+  );
 }

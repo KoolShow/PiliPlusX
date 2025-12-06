@@ -1,8 +1,10 @@
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/select_mask.dart';
 import 'package:PiliPlus/models_new/fav/fav_note/list.dart';
 import 'package:PiliPlus/pages/fav/note/controller.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 
 class FavNoteItem extends StatelessWidget {
@@ -17,11 +19,18 @@ class FavNoteItem extends StatelessWidget {
   final FavNoteController ctr;
   final VoidCallback onSelect;
 
+  void onLongPress() {
+    if (!ctr.enableMultiSelect.value) {
+      ctr.enableMultiSelect.value = true;
+      onSelect();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Material(
-      color: Colors.transparent,
+      type: MaterialType.transparency,
       child: InkWell(
         onTap: () {
           if (ctr.enableMultiSelect.value) {
@@ -35,12 +44,8 @@ class FavNoteItem extends StatelessWidget {
             );
           }
         },
-        onLongPress: () {
-          if (!ctr.enableMultiSelect.value) {
-            ctr.enableMultiSelect.value = true;
-            onSelect();
-          }
-        },
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: StyleString.safeSpace,
@@ -64,54 +69,9 @@ class FavNoteItem extends StatelessWidget {
                             height: boxConstraints.maxHeight,
                           ),
                           Positioned.fill(
-                            child: IgnorePointer(
-                              child: LayoutBuilder(
-                                builder: (context, constraints) =>
-                                    AnimatedOpacity(
-                                  opacity: item.checked == true ? 1 : 0,
-                                  duration: const Duration(milliseconds: 200),
-                                  child: Container(
-                                    alignment: Alignment.center,
-                                    height: constraints.maxHeight,
-                                    width: constraints.maxHeight *
-                                        StyleString.aspectRatio,
-                                    decoration: BoxDecoration(
-                                      borderRadius: StyleString.mdRadius,
-                                      color:
-                                          Colors.black.withValues(alpha: 0.6),
-                                    ),
-                                    child: SizedBox(
-                                      width: 34,
-                                      height: 34,
-                                      child: AnimatedScale(
-                                        scale: item.checked == true ? 1 : 0,
-                                        duration:
-                                            const Duration(milliseconds: 250),
-                                        curve: Curves.easeInOut,
-                                        child: IconButton(
-                                          tooltip: '取消选择',
-                                          style: ButtonStyle(
-                                            padding: WidgetStateProperty.all(
-                                                EdgeInsets.zero),
-                                            backgroundColor:
-                                                WidgetStateProperty.resolveWith(
-                                              (states) {
-                                                return theme.colorScheme.surface
-                                                    .withValues(alpha: 0.8);
-                                              },
-                                            ),
-                                          ),
-                                          onPressed: null,
-                                          icon: Icon(
-                                            Icons.done_all_outlined,
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            child: selectMask(
+                              theme,
+                              item.checked == true,
                             ),
                           ),
                         ],

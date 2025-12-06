@@ -2,9 +2,9 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models_new/live/live_search/room_item.dart';
+import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 
 // 视频卡片 - 垂直布局
 class LiveCardVSearch extends StatelessWidget {
@@ -17,48 +17,48 @@ class LiveCardVSearch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String heroTag = Utils.makeHeroTag(item.roomid);
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Card(
       clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: () => Get.toNamed('/liveRoom?roomid=${item.roomid}'),
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-        ),
+        onTap: () => PageUtils.toLiveRoom(item.roomid),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
               aspectRatio: StyleString.aspectRatio,
-              child: LayoutBuilder(builder: (context, boxConstraints) {
-                double maxWidth = boxConstraints.maxWidth;
-                double maxHeight = boxConstraints.maxHeight;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Hero(
-                      tag: heroTag,
-                      child: NetworkImgLayer(
+              child: LayoutBuilder(
+                builder: (context, boxConstraints) {
+                  double maxWidth = boxConstraints.maxWidth;
+                  double maxHeight = boxConstraints.maxHeight;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NetworkImgLayer(
                         src: item.cover!,
                         width: maxWidth,
                         height: maxHeight,
+                        radius: 0,
                       ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: AnimatedOpacity(
-                        opacity: 1,
-                        duration: const Duration(milliseconds: 200),
-                        child: videoStat(context),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: AnimatedOpacity(
+                          opacity: 1,
+                          duration: const Duration(milliseconds: 200),
+                          child: videoStat(context),
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              }),
+                    ],
+                  );
+                },
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(5, 8, 5, 4),
@@ -100,9 +100,9 @@ class LiveCardVSearch extends StatelessWidget {
             '${item.name}',
             style: const TextStyle(fontSize: 11, color: Colors.white),
           ),
-          if (item.watchedShow?.textSmall != null)
+          if (item.watchedShow?.textLarge case final textLarge?)
             Text(
-              '${Utils.numFormat(item.watchedShow!.textSmall)}围观',
+              textLarge,
               style: const TextStyle(fontSize: 11, color: Colors.white),
             ),
         ],

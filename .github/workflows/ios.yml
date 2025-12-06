@@ -1,11 +1,14 @@
 name: Build for iOS
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      branch:
+      tag:
+        description: "tag"
         required: false
-        default: 'main'
+        default: ""
+        type: string
+  workflow_dispatch:
 
 jobs:
   build-macos-app:
@@ -13,9 +16,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.inputs.branch }}
           fetch-depth: 0
 
       - name: Setup flutter
@@ -24,21 +26,27 @@ jobs:
           channel: stable
           flutter-version-file: pubspec.yaml
 
-      - name: 更新版本号
-        run: |
-          version_name=$(yq e '.version' pubspec.yaml | cut -d "+" -f 1)
-          sed -i '' "s/version: .*/version: $version_name+$(git rev-list --count HEAD)/" pubspec.yaml
+      - name: Set and Extract version
+        shell: pwsh
+        run: lib/scripts/build.ps1
 
       - name: Build iOS
         run: |
-          chmod +x lib/scripts/build.sh
-          lib/scripts/build.sh
-          flutter build ios --release --no-codesign 
+          flutter build ios --release --no-codesign --dart-define-from-file=pili_release.json
           ln -sf ./build/ios/iphoneos Payload
-          zip -r9 ios-release-no-sign.ipa Payload/runner.app
+          zip -r9 PiliPlus_ios_${{env.version}}.ipa Payload/runner.app
+
+      - name: Release
+        if: ${{ github.event.inputs.tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.tag }}
+          files: |
+            PiliPlus_ios_*.ipa
 
       - name: Upload ios release
         uses: actions/upload-artifact@v4
         with:
-          name: ios-release
-          path: ios-release-no-sign.ipa
+          name: iOS-release
+          path: PiliPlus_ios_*.ipa

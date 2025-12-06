@@ -1,7 +1,4 @@
-import 'package:PiliPlus/pages/common/multi_select_controller.dart'
-    show MultiSelectData;
-
-class MemberTagItemModel with MultiSelectData {
+class MemberTagItemModel {
   MemberTagItemModel({
     this.count,
     this.name,

@@ -1,12 +1,12 @@
 import 'package:PiliPlus/common/widgets/custom_sliver_persistent_header_delegate.dart';
 import 'package:PiliPlus/common/widgets/video_card/video_card_h.dart';
+import 'package:PiliPlus/models/common/search/video_search_type.dart';
 import 'package:PiliPlus/models/search/result.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/pages/search_panel/video/controller.dart';
 import 'package:PiliPlus/pages/search_panel/view.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class SearchVideoPanel extends CommonSearchPanel {
@@ -21,8 +21,14 @@ class SearchVideoPanel extends CommonSearchPanel {
   State<SearchVideoPanel> createState() => _SearchVideoPanelState();
 }
 
-class _SearchVideoPanelState extends CommonSearchPanelState<SearchVideoPanel,
-    SearchVideoData, SearchVideoItemModel> {
+class _SearchVideoPanelState
+    extends
+        CommonSearchPanelState<
+          SearchVideoPanel,
+          SearchVideoData,
+          SearchVideoItemModel
+        >
+    with GridMixin {
   @override
   late final SearchVideoController controller = Get.put(
     SearchVideoController(
@@ -51,27 +57,21 @@ class _SearchVideoPanelState extends CommonSearchPanelState<SearchVideoPanel,
                   scrollDirection: Axis.horizontal,
                   child: Wrap(
                     children: [
-                      for (var i in controller.filterList) ...[
+                      for (var e in ArchiveFilterType.values)
                         Obx(
                           () => SearchText(
                             fontSize: 13,
-                            text: i['label'],
+                            text: e.desc,
                             bgColor: Colors.transparent,
-                            textColor:
-                                controller.selectedType.value == i['type']
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.outline,
-                            onTap: (value) async {
-                              controller.selectedType.value = i['type'];
-                              controller.order.value =
-                                  i['type'].toString().split('.').last;
-                              SmartDialog.showLoading(msg: 'loading');
-                              await controller.onReload();
-                              SmartDialog.dismiss();
-                            },
+                            textColor: controller.selectedType.value == e
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                            onTap: (_) => controller
+                              ..order = e.name
+                              ..selectedType.value = e
+                              ..onSortSearch(getBack: false),
                           ),
                         ),
-                      ]
                     ],
                   ),
                 ),
@@ -83,8 +83,8 @@ class _SearchVideoPanelState extends CommonSearchPanelState<SearchVideoPanel,
                 height: 32,
                 child: IconButton(
                   tooltip: '筛选',
-                  style: ButtonStyle(
-                    padding: WidgetStateProperty.all(EdgeInsets.zero),
+                  style: const ButtonStyle(
+                    padding: WidgetStatePropertyAll(EdgeInsets.zero),
                   ),
                   onPressed: () => controller.onShowFilterDialog(context),
                   icon: Icon(
@@ -103,20 +103,23 @@ class _SearchVideoPanelState extends CommonSearchPanelState<SearchVideoPanel,
 
   @override
   Widget buildList(ThemeData theme, List<SearchVideoItemModel> list) {
-    return SliverGrid(
-      gridDelegate: Grid.videoCardHDelegate(context),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          if (index == list.length - 1) {
-            controller.onLoadMore();
-          }
-          return VideoCardH(
-            videoItem: list[index],
-            showPubdate: true,
-          );
-        },
-        childCount: list.length,
-      ),
+    return SliverGrid.builder(
+      gridDelegate: gridDelegate,
+      itemBuilder: (context, index) {
+        if (index == list.length - 1) {
+          controller.onLoadMore();
+        }
+        return VideoCardH(
+          videoItem: list[index],
+          onRemove: () => controller.loadingState
+            ..value.data!.removeAt(index)
+            ..refresh(),
+        );
+      },
+      itemCount: list.length,
     );
   }
+
+  @override
+  Widget get buildLoading => gridSkeleton;
 }

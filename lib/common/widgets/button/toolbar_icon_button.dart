@@ -29,10 +29,10 @@ class ToolbarIconButton extends StatelessWidget {
             ? theme.colorScheme.onSecondaryContainer
             : theme.colorScheme.outline,
         style: ButtonStyle(
-          padding: WidgetStateProperty.all(EdgeInsets.zero),
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            return selected ? theme.colorScheme.secondaryContainer : null;
-          }),
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          backgroundColor: WidgetStatePropertyAll(
+            selected ? theme.colorScheme.secondaryContainer : null,
+          ),
         ),
       ),
     );

@@ -3,11 +3,13 @@ import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
+import 'package:PiliPlus/common/widgets/video_card/video_card_v.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/member/coin_like_arc/item.dart';
-import 'package:PiliPlus/utils/id_utils.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
@@ -22,9 +24,13 @@ class MemberCoinLikeItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+      aid: item.param,
+    );
     return Card(
       clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
       child: InkWell(
         onTap: () async {
           if (item.isPgc == true) {
@@ -38,46 +44,57 @@ class MemberCoinLikeItem extends StatelessWidget {
             int? cid = await SearchHttp.ab2c(aid: item.param);
             if (cid != null) {
               PageUtils.toVideoPage(
-                'bvid=${IdUtils.av2bv(int.parse(item.param!))}&cid=$cid',
-                arguments: {
-                  'videoItem': item,
-                  'heroTag': Utils.makeHeroTag(item.param)
-                },
+                aid: int.parse(item.param!),
+                cid: cid,
+                cover: item.cover,
+                title: item.title,
               );
             }
           }
         },
-        onLongPress: () => imageSaveDialog(
-          title: item.title,
-          cover: item.cover,
-          aid: item.param,
-        ),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
               aspectRatio: StyleString.aspectRatio,
-              child: LayoutBuilder(builder: (context, boxConstraints) {
-                double maxWidth = boxConstraints.maxWidth;
-                double maxHeight = boxConstraints.maxHeight;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    NetworkImgLayer(
-                      src: item.cover,
-                      width: maxWidth,
-                      height: maxHeight,
-                    ),
-                    if (item.duration != null && item.duration! > 0)
-                      PBadge(
-                        bottom: 6,
-                        right: 6,
-                        type: PBadgeType.gray,
-                        text: Utils.timeFormat(item.duration),
-                      )
-                  ],
-                );
-              }),
+              child: LayoutBuilder(
+                builder: (context, boxConstraints) {
+                  double maxWidth = boxConstraints.maxWidth;
+                  double maxHeight = boxConstraints.maxHeight;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NetworkImgLayer(
+                        src: item.cover,
+                        width: maxWidth,
+                        height: maxHeight,
+                        radius: 0,
+                      ),
+                      if (item.isCooperation == true)
+                        const PBadge(
+                          text: '合作',
+                          top: 6,
+                          right: 6,
+                        )
+                      else if (item.isSteins == true)
+                        const PBadge(
+                          text: '互动',
+                          top: 6,
+                          right: 6,
+                        ),
+                      if (item.duration != null && item.duration! > 0)
+                        PBadge(
+                          bottom: 6,
+                          right: 6,
+                          type: PBadgeType.gray,
+                          text: DurationUtils.formatDuration(item.duration),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(5, 6, 0, 0),
@@ -104,14 +121,17 @@ class MemberCoinLikeItem extends StatelessWidget {
                       ),
                       const Spacer(),
                       Text(
-                        Utils.customStampStr(
-                            timestamp: item.ctime, date: 'MM-DD'),
+                        DateFormatUtils.dateFormat(
+                          item.ctime,
+                          short: VideoCardV.shortFormat,
+                          long: VideoCardV.longFormat,
+                        ),
                         style: TextStyle(
                           fontSize: 11,
                           color: Theme.of(context).colorScheme.outline,
                         ),
                       ),
-                      const SizedBox(width: 6)
+                      const SizedBox(width: 6),
                     ],
                   ),
                 ],

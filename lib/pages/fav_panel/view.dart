@@ -1,18 +1,20 @@
-import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/models_new/fav/fav_folder/data.dart';
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
+import 'package:PiliPlus/pages/common/common_intro_controller.dart';
+import 'package:PiliPlus/utils/fav_utils.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
-import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class FavPanel extends StatefulWidget {
   const FavPanel({
     super.key,
-    this.ctr,
+    required this.ctr,
     this.scrollController,
   });
 
-  final dynamic ctr;
+  final FavMixin ctr;
   final ScrollController? scrollController;
 
   @override
@@ -20,17 +22,80 @@ class FavPanel extends StatefulWidget {
 }
 
 class _FavPanelState extends State<FavPanel> {
-  late Future _futureBuilderFuture;
+  LoadingState loadingState = LoadingState.loading();
 
   @override
   void initState() {
     super.initState();
-    _futureBuilderFuture = widget.ctr.queryVideoInFolder();
+    _query();
+  }
+
+  Future<void> _query() async {
+    var res = await widget.ctr.queryVideoInFolder();
+    if (mounted) {
+      loadingState = res;
+      setState(() {});
+    }
+  }
+
+  Widget get _buildBody {
+    late final list = widget.ctr.favFolderData.value.list!;
+    return switch (loadingState) {
+      Loading() => loadingWidget,
+      Success() => ListView.builder(
+        controller: widget.scrollController,
+        itemCount: list.length,
+        itemBuilder: (context, index) {
+          FavFolderInfo item = list[index];
+          return Material(
+            type: MaterialType.transparency,
+            child: Builder(
+              builder: (context) {
+                void onTap() {
+                  bool isChecked = item.favState == 1;
+                  item
+                    ..favState = isChecked ? 0 : 1
+                    ..mediaCount = isChecked
+                        ? item.mediaCount - 1
+                        : item.mediaCount + 1;
+                  (context as Element).markNeedsBuild();
+                }
+
+                return ListTile(
+                  onTap: onTap,
+                  dense: true,
+                  leading: FavUtils.isPublicFav(item.attr)
+                      ? const Icon(Icons.folder_outlined)
+                      : const Icon(Icons.lock_outline),
+                  minLeadingWidth: 0,
+                  title: Text(item.title),
+                  subtitle: Text(
+                    '${item.mediaCount}个内容 . ${FavUtils.isPublicFavText(item.attr)}',
+                  ),
+                  trailing: Transform.scale(
+                    scale: 0.9,
+                    child: Checkbox(
+                      value: item.favState == 1,
+                      onChanged: (bool? checkValue) => onTap(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+      Error(:var errMsg) => scrollErrorWidget(
+        controller: widget.scrollController,
+        errMsg: errMsg,
+        onReload: _query,
+      ),
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme = Theme.of(context).colorScheme;
     return Column(
       children: [
         AppBar(
@@ -45,143 +110,59 @@ class _FavPanelState extends State<FavPanel> {
             TextButton.icon(
               onPressed: () => Get.toNamed('/createFav')?.then((data) {
                 if (data != null) {
-                  (widget.ctr?.favFolderData as Rx<FavFolderData>)
+                  widget.ctr.favFolderData
                     ..value.list?.insert(1, data)
                     ..refresh();
                 }
               }),
               icon: Icon(
                 Icons.add,
-                color: theme.colorScheme.primary,
+                color: theme.primary,
               ),
               label: const Text('新建收藏夹'),
               style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
                 visualDensity: VisualDensity.compact,
               ),
             ),
             const SizedBox(width: 16),
           ],
         ),
-        Expanded(
-          child: FutureBuilder(
-            future: _futureBuilderFuture,
-            builder: (BuildContext context, AsyncSnapshot snapshot) {
-              if (snapshot.connectionState == ConnectionState.done) {
-                // TODO: refactor
-                if (snapshot.data is! Map) {
-                  return HttpError(
-                    isSliver: false,
-                    onReload: () => setState(() {
-                      _futureBuilderFuture = widget.ctr.queryVideoInFolder();
-                    }),
-                  );
-                }
-                Map data = snapshot.data as Map;
-                if (data['status']) {
-                  return Obx(
-                    () => Material(
-                      color: Colors.transparent,
-                      child: ListView.builder(
-                        controller: widget.scrollController,
-                        itemCount: widget.ctr.favFolderData.value.list.length,
-                        itemBuilder: (context, index) {
-                          return ListTile(
-                            onTap: () => widget.ctr.onChoose(
-                                widget.ctr.favFolderData.value.list[index]
-                                        .favState !=
-                                    1,
-                                index),
-                            dense: true,
-                            leading: Utils.isPublicFav(widget
-                                    .ctr.favFolderData.value.list[index].attr)
-                                ? const Icon(Icons.folder_outlined)
-                                : const Icon(Icons.lock_outline),
-                            minLeadingWidth: 0,
-                            title: Text(widget
-                                .ctr.favFolderData.value.list[index].title!),
-                            subtitle: Text(
-                              '${widget.ctr.favFolderData.value.list[index].mediaCount}个内容 . ${Utils.isPublicFavText(widget.ctr.favFolderData.value.list[index].attr)}',
-                            ),
-                            trailing: Transform.scale(
-                              scale: 0.9,
-                              child: Checkbox(
-                                value: widget.ctr.favFolderData.value
-                                        .list[index].favState ==
-                                    1,
-                                onChanged: (bool? checkValue) =>
-                                    widget.ctr.onChoose(checkValue!, index),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                } else {
-                  return CustomScrollView(
-                    controller: widget.scrollController,
-                    slivers: [
-                      HttpError(
-                        errMsg: data['msg'],
-                        onReload: () => setState(() {
-                          _futureBuilderFuture =
-                              widget.ctr.queryVideoInFolder();
-                        }),
-                      )
-                    ],
-                  );
-                }
-              } else {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
-            },
-          ),
-        ),
+        Expanded(child: _buildBody),
         Divider(
           height: 1,
-          color: theme.disabledColor.withValues(alpha: 0.08),
+          color: theme.outline.withValues(alpha: 0.1),
         ),
         Padding(
           padding: EdgeInsets.only(
             left: 20,
             right: 20,
             top: 12,
-            bottom: MediaQuery.paddingOf(context).bottom + 12,
+            bottom: MediaQuery.viewPaddingOf(context).bottom + 12,
           ),
           child: Row(
+            spacing: 25,
             mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              TextButton(
-                onPressed: () => Get.back(),
-                style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  visualDensity: const VisualDensity(
-                    horizontal: -1,
-                    vertical: -2,
-                  ),
-                  foregroundColor: theme.colorScheme.outline,
-                  backgroundColor: theme.colorScheme.onInverseSurface,
+            children: [
+              FilledButton.tonal(
+                onPressed: Get.back,
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: theme.outline,
+                  backgroundColor: theme.onInverseSurface,
                 ),
                 child: const Text('取消'),
               ),
-              const SizedBox(width: 25),
               FilledButton.tonal(
                 onPressed: () {
                   feedBack();
                   widget.ctr.actionFavVideo();
                 },
                 style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  visualDensity: const VisualDensity(
-                    horizontal: -1,
-                    vertical: -2,
-                  ),
+                  visualDensity: VisualDensity.compact,
                 ),
                 child: const Text('完成'),
               ),

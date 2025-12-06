@@ -1,16 +1,15 @@
-import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/common/skeleton/video_card_h.dart';
-import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/refresh_indicator.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
+import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
+import 'package:PiliPlus/pages/later/base_controller.dart';
 import 'package:PiliPlus/pages/later/controller.dart';
 import 'package:PiliPlus/pages/later/widgets/video_card_h_later.dart';
+import 'package:PiliPlus/utils/extension.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -27,11 +26,12 @@ class LaterViewChildPage extends StatefulWidget {
 }
 
 class _LaterViewChildPageState extends State<LaterViewChildPage>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, GridMixin {
   late final LaterController _laterController = Get.put(
     LaterController(widget.laterViewType),
     tag: widget.laterViewType.type.toString(),
   );
+  late final _baseCtr = Get.putOrFind(LaterBaseController.new);
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class _LaterViewChildPageState extends State<LaterViewChildPage>
           SliverPadding(
             padding: EdgeInsets.only(
               top: 7,
-              bottom: MediaQuery.paddingOf(context).bottom + 85,
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 85,
             ),
             sliver: Obx(
               () => _buildBody(_laterController.loadingState.value),
@@ -57,140 +57,51 @@ class _LaterViewChildPageState extends State<LaterViewChildPage>
   }
 
   Widget _buildBody(LoadingState<List<LaterItemModel>?> loadingState) {
-    final theme = Theme.of(context);
     return switch (loadingState) {
-      Loading() => SliverGrid(
-          gridDelegate: Grid.videoCardHDelegate(context),
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              return const VideoCardHSkeleton();
-            },
-            childCount: 10,
-          ),
-        ),
-      Success(:var response) => response?.isNotEmpty == true
-          ? SliverGrid(
-              gridDelegate: Grid.videoCardHDelegate(context),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
+      Loading() => gridSkeleton,
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? SliverGrid.builder(
+                gridDelegate: gridDelegate,
+                itemBuilder: (context, index) {
                   if (index == response.length - 1) {
                     _laterController.onLoadMore();
                   }
                   var videoItem = response[index];
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      VideoCardHLater(
-                        videoItem: videoItem,
-                        onViewLater: (cid) {
-                          PageUtils.toVideoPage(
-                            'bvid=${videoItem.bvid}&cid=$cid',
-                            arguments: {
-                              'videoItem': videoItem,
-                              'oid': videoItem.aid,
-                              'heroTag': Utils.makeHeroTag(videoItem.bvid),
-                              'sourceType': 'watchLater',
-                              'count': _laterController
-                                  .baseCtr.counts[LaterViewType.all],
-                              'favTitle': '稍后再看',
-                              'mediaId': _laterController.accountService.mid,
-                              'desc': false,
-                              'isContinuePlaying': index != 0,
-                            },
-                          );
-                        },
-                        onTap: !_laterController.baseCtr.enableMultiSelect.value
-                            ? null
-                            : () => _laterController.onSelect(index),
-                        onLongPress: () {
-                          if (!_laterController
-                              .baseCtr.enableMultiSelect.value) {
-                            _laterController.baseCtr.enableMultiSelect.value =
-                                true;
-                            _laterController.onSelect(index);
-                          }
-                        },
-                      ),
-                      Positioned(
-                        top: 5,
-                        left: 12,
-                        bottom: 5,
-                        child: IgnorePointer(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) => AnimatedOpacity(
-                              opacity: videoItem.checked == true ? 1 : 0,
-                              duration: const Duration(milliseconds: 200),
-                              child: Container(
-                                alignment: Alignment.center,
-                                height: constraints.maxHeight,
-                                width: constraints.maxHeight *
-                                    StyleString.aspectRatio,
-                                decoration: BoxDecoration(
-                                  borderRadius: StyleString.mdRadius,
-                                  color: Colors.black.withValues(alpha: 0.6),
-                                ),
-                                child: SizedBox(
-                                  width: 34,
-                                  height: 34,
-                                  child: AnimatedScale(
-                                    scale: videoItem.checked == true ? 1 : 0,
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: IconButton(
-                                      tooltip: '取消选择',
-                                      style: ButtonStyle(
-                                        padding: WidgetStateProperty.all(
-                                            EdgeInsets.zero),
-                                        backgroundColor:
-                                            WidgetStateProperty.resolveWith(
-                                          (states) {
-                                            return theme.colorScheme.surface
-                                                .withValues(alpha: 0.8);
-                                          },
-                                        ),
-                                      ),
-                                      onPressed: null,
-                                      icon: Icon(
-                                        Icons.done_all_outlined,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 12,
-                        bottom: 0,
-                        child: iconButton(
-                          tooltip: '移除',
-                          context: context,
-                          onPressed: () => _laterController.toViewDel(
-                            context,
-                            index,
-                            videoItem.aid,
-                          ),
-                          icon: Icons.clear,
-                          iconColor: theme.colorScheme.outline,
-                          bgColor: Colors.transparent,
-                        ),
-                      ),
-                    ],
+                  return VideoCardHLater(
+                    index: index,
+                    videoItem: videoItem,
+                    ctr: _laterController,
+                    onViewLater: (cid) {
+                      PageUtils.toVideoPage(
+                        bvid: videoItem.bvid,
+                        cid: cid,
+                        cover: videoItem.pic,
+                        title: videoItem.title,
+                        extraArguments: _baseCtr.isPlayAll.value
+                            ? {
+                                'oid': videoItem.aid,
+                                'sourceType': SourceType.watchLater,
+                                'count': _laterController
+                                    .baseCtr
+                                    .counts[LaterViewType.all],
+                                'favTitle': '稍后再看',
+                                'mediaId': _laterController.mid,
+                                'desc': _laterController.asc.value,
+                                'isContinuePlaying': index != 0,
+                              }
+                            : null,
+                      );
+                    },
                   );
                 },
-                childCount: response!.length,
-              ),
-            )
-          : HttpError(
-              onReload: _laterController.onReload,
-            ),
+                itemCount: response.length,
+              )
+            : HttpError(onReload: _laterController.onReload),
       Error(:var errMsg) => HttpError(
-          errMsg: errMsg,
-          onReload: _laterController.onReload,
-        ),
+        errMsg: errMsg,
+        onReload: _laterController.onReload,
+      ),
     };
   }
 

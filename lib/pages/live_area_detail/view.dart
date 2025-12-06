@@ -29,12 +29,15 @@ class LiveAreaDetailPage extends StatefulWidget {
 
 class _LiveAreaDetailPageState extends State<LiveAreaDetailPage> {
   late final _controller = Get.put(
-      LiveAreaDatailController(widget.areaId?.toString(), widget.parentAreaId));
+    LiveAreaDetailController(widget.areaId?.toString(), widget.parentAreaId),
+  );
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final padding = MediaQuery.viewPaddingOf(context);
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(widget.parentName),
         actions: [
@@ -45,84 +48,91 @@ class _LiveAreaDetailPageState extends State<LiveAreaDetailPage> {
           const SizedBox(width: 16),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Obx(() => _buildBody(theme, _controller.loadingState.value)),
+      body: Padding(
+        padding: EdgeInsets.only(left: padding.left, right: padding.right),
+        child: Obx(
+          () =>
+              _buildBody(theme, padding.bottom, _controller.loadingState.value),
+        ),
       ),
     );
   }
 
   Widget _buildBody(
-      ThemeData theme, LoadingState<List<AreaItem>?> loadingState) {
+    ThemeData theme,
+    double bottom,
+    LoadingState<List<AreaItem>?> loadingState,
+  ) {
     return switch (loadingState) {
       Loading() => const SizedBox.shrink(),
-      Success(:var response) => response?.isNotEmpty == true
-          ? DefaultTabController(
-              initialIndex: _controller.initialIndex,
-              length: response!.length,
-              child: Builder(
-                builder: (context) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TabBar(
-                              dividerHeight: 0,
-                              dividerColor: Colors.transparent,
-                              isScrollable: true,
-                              tabAlignment: TabAlignment.start,
-                              tabs: response
-                                  .map((e) => Tab(text: e.name ?? ''))
-                                  .toList(),
-                              onTap: (index) {
-                                try {
-                                  if (!DefaultTabController.of(context)
-                                      .indexIsChanging) {
-                                    final item = response[index];
-                                    Get.find<LiveAreaChildController>(
-                                            tag: '${item.id}${item.parentId}')
-                                        .animateToTop();
-                                  }
-                                } catch (_) {}
-                              },
+      Success(:var response) =>
+        response != null && response.isNotEmpty
+            ? DefaultTabController(
+                initialIndex: _controller.initialIndex,
+                length: response.length,
+                child: Builder(
+                  builder: (context) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TabBar(
+                                dividerHeight: 0,
+                                dividerColor: Colors.transparent,
+                                isScrollable: true,
+                                tabAlignment: TabAlignment.start,
+                                tabs: response
+                                    .map((e) => Tab(text: e.name ?? ''))
+                                    .toList(),
+                                onTap: (index) {
+                                  try {
+                                    if (!DefaultTabController.of(
+                                      context,
+                                    ).indexIsChanging) {
+                                      final item = response[index];
+                                      Get.find<LiveAreaChildController>(
+                                        tag: '${item.id}${item.parentId}',
+                                      ).animateToTop();
+                                    }
+                                  } catch (_) {}
+                                },
+                              ),
                             ),
-                          ),
-                          iconButton(
-                            context: context,
-                            icon: Icons.menu,
-                            bgColor: Colors.transparent,
-                            onPressed: () =>
-                                _showTags(context, theme, response),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 1),
-                      Expanded(
-                        child: tabBarView(
-                          children: response
-                              .map((e) => LiveAreaChildPage(
+                            iconButton(
+                              icon: const Icon(Icons.menu),
+                              onPressed: () =>
+                                  _showTags(context, theme, bottom, response),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: tabBarView(
+                            children: response
+                                .map(
+                                  (e) => LiveAreaChildPage(
                                     areaId: e.id,
                                     parentAreaId: e.parentId,
-                                  ))
-                              .toList(),
+                                  ),
+                                )
+                                .toList(),
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
+              )
+            : LiveAreaChildPage(
+                areaId: widget.areaId,
+                parentAreaId: widget.parentAreaId,
               ),
-            )
-          : LiveAreaChildPage(
-              areaId: widget.areaId,
-              parentAreaId: widget.parentAreaId,
-            ),
       Error() => LiveAreaChildPage(
-          areaId: widget.areaId,
-          parentAreaId: widget.parentAreaId,
-        ),
+        areaId: widget.areaId,
+        parentAreaId: widget.parentAreaId,
+      ),
     };
   }
 
@@ -155,7 +165,12 @@ class _LiveAreaDetailPageState extends State<LiveAreaDetailPage> {
     );
   }
 
-  void _showTags(BuildContext context, ThemeData theme, List<AreaItem> list) {
+  void _showTags(
+    BuildContext context,
+    ThemeData theme,
+    double bottom,
+    List<AreaItem> list,
+  ) {
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
@@ -189,16 +204,16 @@ class _LiveAreaDetailPageState extends State<LiveAreaDetailPage> {
                     controller: scrollController,
                     padding: EdgeInsets.only(
                       top: 12,
-                      bottom: MediaQuery.paddingOf(context).bottom + 80,
+                      bottom: bottom + 100,
                     ),
                     itemCount: list.length,
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 100,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      mainAxisExtent: 80,
-                    ),
+                          maxCrossAxisExtent: 100,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          mainAxisExtent: 80,
+                        ),
                     itemBuilder: (_, index) {
                       return _tagItem(
                         theme: theme,

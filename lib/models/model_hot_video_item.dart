@@ -1,8 +1,7 @@
 import 'package:PiliPlus/models/model_owner.dart';
 import 'package:PiliPlus/models/model_rec_video_item.dart';
 import 'package:PiliPlus/models/model_video.dart';
-import 'package:PiliPlus/pages/common/multi_select_controller.dart'
-    show MultiSelectData;
+import 'package:PiliPlus/pages/common/multi_select/base.dart';
 
 // 稍后再看, 排行榜等网页返回也使用该类
 class HotVideoItemModel extends BaseRecVideoItemModel with MultiSelectData {
@@ -17,8 +16,9 @@ class HotVideoItemModel extends BaseRecVideoItemModel with MultiSelectData {
   String? pubLocation;
   String? pgcLabel;
   String? redirectUrl;
-
   num? progress;
+  int? isCooperation;
+  bool? isCharging;
 
   HotVideoItemModel.fromJson(Map<String, dynamic> json) {
     aid = json["aid"];
@@ -47,6 +47,8 @@ class HotVideoItemModel extends BaseRecVideoItemModel with MultiSelectData {
     redirectUrl = json['redirect_url'];
     // uri = json['uri']; // 仅在稍后再看存在
     progress = json['progress'];
+    isCooperation = json['rights']?['is_cooperation'];
+    isCharging = json['charging_pay']?['level'] != null;
   }
 
   // @override
@@ -60,7 +62,7 @@ class HotVideoItemModel extends BaseRecVideoItemModel with MultiSelectData {
 class HotStat extends Stat {
   int? reply;
   int? favorite;
-  int? coin;
+  num? coin;
   int? share;
   int? nowRank;
   int? hisRank;

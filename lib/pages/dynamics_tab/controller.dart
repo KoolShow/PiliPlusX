@@ -28,7 +28,7 @@ class DynamicsTabController
   @override
   Future<void> onRefresh() {
     if (dynamicsType == DynamicsTabType.all) {
-      mainController.setCount();
+      mainController.setDynCount();
     }
     offset = '';
     return super.onRefresh();
@@ -36,19 +36,8 @@ class DynamicsTabController
 
   @override
   List<DynamicItemModel>? getDataList(DynamicsDataModel response) {
-    if (dynamicsType != DynamicsTabType.up &&
-        dynamicsController.tempBannedList.isNotEmpty) {
-      response.items?.removeWhere((e) => dynamicsController.tempBannedList
-          .contains(e.modules.moduleAuthor?.mid));
-    }
+    offset = response.offset ?? '';
     return response.items;
-  }
-
-  @override
-  bool customHandleResponse(
-      bool isRefresh, Success<DynamicsDataModel> response) {
-    offset = response.response.offset ?? '';
-    return false;
   }
 
   @override
@@ -57,6 +46,7 @@ class DynamicsTabController
         type: dynamicsType,
         offset: offset,
         mid: mid,
+        tempBannedList: dynamicsController.tempBannedList,
       );
 
   Future<void> onRemove(int index, dynamic dynamicId) async {
@@ -66,15 +56,6 @@ class DynamicsTabController
         ..value.data!.removeAt(index)
         ..refresh();
       SmartDialog.showToast('删除成功');
-    } else {
-      SmartDialog.showToast(res['msg']);
-    }
-  }
-
-  Future<void> onSetTop(bool isTop, dynamic dynamicId) async {
-    var res = await DynamicsHttp.setTop(dynamicId: dynamicId);
-    if (res['status']) {
-      SmartDialog.showToast('${isTop ? '取消' : ''}置顶成功');
     } else {
       SmartDialog.showToast(res['msg']);
     }
@@ -92,5 +73,18 @@ class DynamicsTabController
         ..value.data!.removeAt(index)
         ..refresh();
     }
+  }
+
+  void onUnfold(DynamicItemModel item, int index) {
+    try {
+      final list = loadingState.value.data!;
+      final ids = item.modules.moduleFold!.ids!;
+      final flag = index + ids.length + 1;
+      for (int i = index + 1; i < flag; i++) {
+        list[i].visible = true;
+      }
+      item.modules.moduleFold = null;
+      loadingState.refresh();
+    } catch (_) {}
   }
 }

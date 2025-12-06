@@ -1,6 +1,6 @@
 import 'package:PiliPlus/models/common/image_preview_type.dart';
-import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/image_utils.dart';
+import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -14,7 +14,6 @@ Widget htmlRender({
   int? imgCount,
   List<String>? imgList,
   required double maxWidth,
-  Function(List<String>, int)? callback,
 }) {
   // if (kDebugMode) debugPrint('htmlRender');
   final extensions = [
@@ -35,14 +34,14 @@ Widget htmlRender({
           }
 
           String? clazz = attributes['class'];
-          String? height = RegExp(r'max-height:(\d+)px')
-              .firstMatch('${attributes['style']}')
-              ?.group(1);
+          String? height = RegExp(
+            r'max-height:(\d+)px',
+          ).firstMatch('${attributes['style']}')?.group(1);
           if (clazz?.contains('cut-off') == true || height != null) {
             return CachedNetworkImage(
               width: maxWidth,
               height: height != null ? double.parse(height) : null,
-              imageUrl: Utils.thumbnailImgUrl(imgUrl),
+              imageUrl: ImageUtils.thumbnailUrl(imgUrl),
               fit: BoxFit.contain,
             );
           }
@@ -50,20 +49,14 @@ Widget htmlRender({
           return Hero(
             tag: imgUrl,
             child: GestureDetector(
-              onTap: () {
-                if (callback != null) {
-                  callback([imgUrl], 0);
-                } else {
-                  context.imageView(
-                    imgList: [SourceModel(url: imgUrl)],
-                    quality: 60,
-                  );
-                }
-              },
+              onTap: () => PageUtils.imageView(
+                imgList: [SourceModel(url: imgUrl)],
+                quality: 60,
+              ),
               child: CachedNetworkImage(
                 width: size,
                 height: size,
-                imageUrl: Utils.thumbnailImgUrl(imgUrl, 60),
+                imageUrl: ImageUtils.thumbnailUrl(imgUrl, 60),
                 fadeInDuration: const Duration(milliseconds: 120),
                 fadeOutDuration: const Duration(milliseconds: 120),
                 placeholder: (context, url) =>

@@ -1,9 +1,13 @@
 import 'dart:convert';
 
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
+import 'package:PiliPlus/utils/context_ext.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide ContextExtensionss;
 import 'package:webdav_client/webdav_client.dart' as webdav;
 
 class WebDav {
@@ -17,26 +21,27 @@ class WebDav {
   factory WebDav() => _instance;
 
   Future<Pair<bool, String?>> init() async {
-    final webDavUri = GStorage.webdavUri;
-    final webDavUsername = GStorage.webdavUsername;
-    final webDavPassword = GStorage.webdavPassword;
-    _webdavDirectory = GStorage.webdavDirectory;
+    final webDavUri = Pref.webdavUri;
+    final webDavUsername = Pref.webdavUsername;
+    final webDavPassword = Pref.webdavPassword;
+    _webdavDirectory = Pref.webdavDirectory;
     if (!_webdavDirectory.endsWith('/')) {
       _webdavDirectory += '/';
     }
-    _webdavDirectory += 'PiliPlus';
+    _webdavDirectory += Constants.appName;
 
     try {
       _client = null;
-      final client = webdav.newClient(
-        webDavUri,
-        user: webDavUsername,
-        password: webDavPassword,
-      )
-        ..setHeaders({'accept-charset': 'utf-8'})
-        ..setConnectTimeout(4000)
-        ..setReceiveTimeout(4000)
-        ..setSendTimeout(4000);
+      final client =
+          webdav.newClient(
+              webDavUri,
+              user: webDavUsername,
+              password: webDavPassword,
+            )
+            ..setHeaders({'accept-charset': 'utf-8'})
+            ..setConnectTimeout(12000)
+            ..setReceiveTimeout(12000)
+            ..setSendTimeout(12000);
 
       await client.mkdirAll(_webdavDirectory);
 
@@ -48,9 +53,12 @@ class WebDav {
   }
 
   String _getFileName() {
-    return Get.context!.isTablet
-        ? 'piliplus_settings_pad.json'
-        : 'piliplus_settings_phone.json';
+    final type = Utils.isDesktop
+        ? 'desktop'
+        : Get.context!.isTablet
+        ? 'pad'
+        : 'phone';
+    return 'piliplus_settings_$type.json';
   }
 
   Future<void> backup() async {

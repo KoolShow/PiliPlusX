@@ -1,22 +1,16 @@
-import 'package:canvas_danmaku/models/danmaku_content_item.dart';
-import 'package:flutter/material.dart';
+import 'dart:ui' show Color;
 
-class DmUtils {
-  static Color decimalToColor(int decimalColor) {
-    // 16777215 表示白色
-    int red = (decimalColor >> 16) & 0xFF;
-    int green = (decimalColor >> 8) & 0xFF;
-    int blue = decimalColor & 0xFF;
+import 'package:canvas_danmaku/models/danmaku_content_item.dart'
+    show DanmakuItemType;
 
-    return Color.fromARGB(255, red, green, blue);
-  }
+abstract final class DmUtils {
+  static Color decimalToColor(int decimalColor) =>
+      Color(decimalColor | 0xFF000000);
 
-  static DanmakuItemType getPosition(int mode) {
-    return switch (mode) {
-      4 => DanmakuItemType.bottom,
-      5 => DanmakuItemType.top,
-      7 => DanmakuItemType.special,
-      _ => DanmakuItemType.scroll,
-    };
-  }
+  static DanmakuItemType getPosition(int mode) => switch (mode) {
+    4 => DanmakuItemType.bottom,
+    5 => DanmakuItemType.top,
+    7 => DanmakuItemType.special,
+    _ => DanmakuItemType.scroll,
+  };
 }

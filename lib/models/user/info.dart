@@ -1,3 +1,4 @@
+import 'package:PiliPlus/utils/extension.dart';
 import 'package:hive/hive.dart';
 
 part 'info.g.dart';
@@ -111,6 +112,24 @@ class UserInfoData {
     shopUrl = json['shop_url'];
     isSeniorMember = json['is_senior_member'];
   }
+
+  @override
+  int get hashCode => Object.hash(mid, uname, face, money, vipStatus);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is UserInfoData &&
+            isLogin == other.isLogin &&
+            face == other.face &&
+            levelInfo == other.levelInfo &&
+            mid == other.mid &&
+            money == other.money &&
+            uname == other.uname &&
+            vipDueDate == other.vipDueDate &&
+            vipStatus == other.vipStatus &&
+            isSeniorMember == other.isSeniorMember;
+  }
 }
 
 @HiveType(typeId: 5)
@@ -134,7 +153,17 @@ class LevelInfo {
     currentLevel = json['current_level'];
     currentMin = json['current_min'];
     currentExp = json['current_exp'];
-    nextExp =
-        json['current_level'] == 6 ? json['current_exp'] : json['next_exp'];
+    nextExp = json['current_level'] == 6
+        ? json['current_exp']
+        : json['next_exp'];
+  }
+
+  @override
+  int get hashCode => currentExp.hashCode;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is LevelInfo && currentExp == other.currentExp;
   }
 }

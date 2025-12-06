@@ -1,12 +1,14 @@
 import 'package:PiliPlus/models_new/video/video_ai_conclusion/model_result.dart';
-import 'package:PiliPlus/pages/common/common_collapse_slide_page.dart';
+import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/pages/video/introduction/ugc/widgets/selectable_text.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
+import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class AiConclusionPanel extends CommonCollapseSlidePage {
+class AiConclusionPanel extends CommonSlidePage {
   final AiConclusionResult item;
 
   const AiConclusionPanel({
@@ -16,9 +18,123 @@ class AiConclusionPanel extends CommonCollapseSlidePage {
 
   @override
   State<AiConclusionPanel> createState() => _AiDetailState();
+
+  static Widget buildContent(
+    BuildContext context,
+    ThemeData theme,
+    AiConclusionResult res, {
+    Key? key,
+    bool tap = true,
+  }) {
+    return CustomScrollView(
+      key: key,
+      shrinkWrap: !tap,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        if (res.summary?.isNotEmpty == true) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: selectableText(
+                res.summary!,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+          if (res.outline?.isNotEmpty == true)
+            SliverToBoxAdapter(
+              child: Divider(
+                height: 20,
+                color: theme.dividerColor.withValues(alpha: 0.1),
+                thickness: 6,
+              ),
+            ),
+        ],
+        if (res.outline?.isNotEmpty == true)
+          SliverPadding(
+            padding: EdgeInsets.only(
+              left: 14,
+              right: 14,
+              bottom: !tap ? 0 : MediaQuery.viewPaddingOf(context).bottom + 100,
+            ),
+            sliver: SliverList.builder(
+              itemCount: res.outline!.length,
+              itemBuilder: (context, index) {
+                final item = res.outline![index];
+                return SelectionArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (index != 0) const SizedBox(height: 10),
+                      Text(
+                        item.title!,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...?item.partOutline?.map(
+                        (item) => Wrap(
+                          children: [
+                            Text.rich(
+                              TextSpan(
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: theme.colorScheme.onSurface,
+                                  height: 1.5,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: DurationUtils.formatDuration(
+                                      item.timestamp,
+                                    ),
+                                    style: tap
+                                        ? TextStyle(
+                                            color: theme.colorScheme.primary,
+                                          )
+                                        : null,
+                                    recognizer: tap
+                                        ? (TapGestureRecognizer()
+                                            ..onTap = () {
+                                              try {
+                                                Get.find<VideoDetailController>(
+                                                  tag: Get.arguments['heroTag'],
+                                                ).plPlayerController.seekTo(
+                                                  Duration(
+                                                    seconds: item.timestamp!,
+                                                  ),
+                                                  isSeek: false,
+                                                );
+                                              } catch (_) {}
+                                            })
+                                        : null,
+                                  ),
+                                  const TextSpan(text: ' '),
+                                  TextSpan(text: item.content!),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
 }
 
-class _AiDetailState extends CommonCollapseSlidePageState<AiConclusionPanel> {
+class _AiDetailState extends State<AiConclusionPanel>
+    with SingleTickerProviderStateMixin, CommonSlideMixin {
   @override
   Widget buildPage(ThemeData theme) {
     return Material(
@@ -27,9 +143,8 @@ class _AiDetailState extends CommonCollapseSlidePageState<AiConclusionPanel> {
         children: [
           GestureDetector(
             onTap: Get.back,
-            child: Container(
+            child: SizedBox(
               height: 35,
-              padding: const EdgeInsets.only(bottom: 2),
               child: Center(
                 child: Container(
                   width: 32,
@@ -50,100 +165,31 @@ class _AiDetailState extends CommonCollapseSlidePageState<AiConclusionPanel> {
     );
   }
 
+  late Key _key;
+  late bool _isNested;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = PrimaryScrollController.of(context);
+    _isNested = controller is ExtendedNestedScrollController;
+    _key = ValueKey(controller.hashCode);
+  }
+
   @override
   Widget buildList(ThemeData theme) {
-    return CustomScrollView(
-      controller: ScrollController(),
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        if (widget.item.summary?.isNotEmpty == true) ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: SelectableText(
-                widget.item.summary!,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ),
-          if (widget.item.outline?.isNotEmpty == true)
-            SliverToBoxAdapter(
-              child: Divider(
-                height: 20,
-                color: theme.dividerColor.withValues(alpha: 0.1),
-                thickness: 6,
-              ),
-            ),
-        ],
-        if (widget.item.outline?.isNotEmpty == true)
-          SliverPadding(
-            padding: EdgeInsets.only(
-              left: 14,
-              right: 14,
-              bottom: MediaQuery.paddingOf(context).bottom + 80,
-            ),
-            sliver: SliverList.builder(
-              itemCount: widget.item.outline!.length,
-              itemBuilder: (context, index) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (index != 0) const SizedBox(height: 10),
-                    SelectableText(
-                      widget.item.outline![index].title!,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    if (widget.item.outline![index].partOutline?.isNotEmpty ==
-                        true)
-                      ...widget.item.outline![index].partOutline!.map(
-                        (item) => Wrap(
-                          children: [
-                            SelectableText.rich(
-                              TextSpan(
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: theme.colorScheme.onSurface,
-                                  height: 1.5,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: Utils.formatDuration(item.timestamp!),
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                    recognizer: TapGestureRecognizer()
-                                      ..onTap = () {
-                                        try {
-                                          Get.find<VideoDetailController>(
-                                                  tag: Get.arguments['heroTag'])
-                                              .plPlayerController
-                                              .seekTo(Duration(
-                                                  seconds: item.timestamp!));
-                                        } catch (_) {}
-                                      },
-                                  ),
-                                  const TextSpan(text: ' '),
-                                  TextSpan(text: item.content!),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-      ],
+    final child = AiConclusionPanel.buildContent(
+      context,
+      theme,
+      widget.item,
+      key: _key,
     );
+    if (_isNested) {
+      return ExtendedVisibilityDetector(
+        uniqueKey: const Key('ai-conclusion'),
+        child: child,
+      );
+    }
+    return child;
   }
 }

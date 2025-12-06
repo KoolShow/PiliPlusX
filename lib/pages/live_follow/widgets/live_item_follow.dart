@@ -2,9 +2,9 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models_new/live/live_follow/item.dart';
+import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 
 // 视频卡片 - 垂直布局
 class LiveCardVFollow extends StatelessWidget {
@@ -17,49 +17,49 @@ class LiveCardVFollow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String heroTag = Utils.makeHeroTag(liveItem.roomid);
+    void onLongPress() => imageSaveDialog(
+      title: liveItem.title,
+      cover: liveItem.roomCover,
+    );
     return Card(
       clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: () => Get.toNamed('/liveRoom?roomid=${liveItem.roomid}'),
-        onLongPress: () => imageSaveDialog(
-          title: liveItem.title,
-          cover: liveItem.roomCover,
-        ),
+        onTap: () => PageUtils.toLiveRoom(liveItem.roomid),
+        onLongPress: onLongPress,
+        onSecondaryTap: Utils.isMobile ? null : onLongPress,
         child: Column(
           children: [
             AspectRatio(
               aspectRatio: StyleString.aspectRatio,
-              child: LayoutBuilder(builder: (context, boxConstraints) {
-                double maxWidth = boxConstraints.maxWidth;
-                double maxHeight = boxConstraints.maxHeight;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Hero(
-                      tag: heroTag,
-                      child: NetworkImgLayer(
+              child: LayoutBuilder(
+                builder: (context, boxConstraints) {
+                  double maxWidth = boxConstraints.maxWidth;
+                  double maxHeight = boxConstraints.maxHeight;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NetworkImgLayer(
                         src: liveItem.roomCover!,
                         width: maxWidth,
                         height: maxHeight,
+                        radius: 0,
                       ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: AnimatedOpacity(
-                        opacity: 1,
-                        duration: const Duration(milliseconds: 200),
-                        child: videoStat(context),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: AnimatedOpacity(
+                          opacity: 1,
+                          duration: const Duration(milliseconds: 200),
+                          child: videoStat(context),
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              }),
+                    ],
+                  );
+                },
+              ),
             ),
-            liveContent(context)
+            liveContent(context),
           ],
         ),
       ),
@@ -129,10 +129,11 @@ class LiveCardVFollow extends StatelessWidget {
             '${liveItem.areaName}',
             style: const TextStyle(fontSize: 11, color: Colors.white),
           ),
-          Text(
-            liveItem.textSmall ?? '',
-            style: const TextStyle(fontSize: 11, color: Colors.white),
-          ),
+          if (liveItem.textSmall case final textSmall?)
+            Text(
+              '$textSmall围观',
+              style: const TextStyle(fontSize: 11, color: Colors.white),
+            ),
         ],
       ),
     );

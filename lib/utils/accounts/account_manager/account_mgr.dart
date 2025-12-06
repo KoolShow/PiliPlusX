@@ -5,9 +5,11 @@ import 'dart:io';
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
+import 'package:PiliPlus/utils/app_sign.dart';
 import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
@@ -23,9 +25,24 @@ class AccountManager extends Interceptor {
       Api.videoIntro,
       Api.replyList,
       Api.replyReplyList,
+
+      // history
       Api.heartBeat,
-      Api.ab2c,
+      Api.historyReport,
+      Api.roomEntryAction,
+      Api.liveLikeReport,
+      Api.mediaListHistory,
+      // Api.historyList,
+      // Api.pauseHistory,
+      // Api.clearHistory,
+      // Api.delHistory,
+      // Api.searchHistory,
+      // Api.historyStatus,
+      // progress
       Api.pgcInfo,
+      Api.pugvInfo,
+
+      Api.ab2c,
       Api.liveRoomInfo,
       Api.liveRoomInfoH5,
       Api.onlineTotal,
@@ -34,9 +51,29 @@ class AccountManager extends Interceptor {
       Api.getSeasonDetailApi,
       Api.liveRoomDmToken,
       Api.liveRoomDmPrefetch,
+      Api.superChatMsg,
       Api.searchByType,
       Api.dynSearch,
-      Api.searchArchive
+      Api.searchArchive,
+
+      // Api.memberInfo,
+      // Api.bgmDetail,
+      // Api.space,
+      // Api.spaceAudio,
+      // Api.spaceComic,
+      // Api.spaceArchive,
+      // Api.spaceChargingArchive,
+      // Api.spaceSeason,
+      // Api.spaceSeries,
+      // Api.spaceBangumi,
+      // Api.spaceOpus,
+      // Api.spaceFav,
+      // Api.seasonSeries,
+      // Api.matchInfo,
+      // Api.articleList,
+      // Api.opusDetail,
+      // Api.articleView,
+      // Api.articleInfo,
     },
     AccountType.recommend: {
       Api.recommendListWeb,
@@ -51,8 +88,30 @@ class AccountManager extends Interceptor {
       Api.liveList,
       Api.searchTrending,
       Api.searchRecommend,
+      Api.getRankApi,
+      Api.pgcRank,
+      Api.pgcSeasonRank,
+      Api.pgcIndexResult,
+      Api.popularSeriesOne,
+      Api.popularSeriesList,
+      Api.popularPrecious,
+      Api.liveAreaList,
+      Api.liveFeedIndex,
+      Api.liveSecondList,
+      Api.liveRoomAreaList,
+      Api.liveSearch,
+      Api.bgmRecommend,
+      Api.dynTopicRcmd,
+      Api.topicFeed,
+      Api.topicTop,
     },
-    AccountType.video: {Api.ugcUrl, Api.pgcUrl}
+    // progress
+    AccountType.video: {
+      Api.ugcUrl,
+      Api.pgcUrl,
+      Api.pugvUrl,
+      Api.tvPlayUrl,
+    },
   };
 
   static const loginApi = {
@@ -72,7 +131,7 @@ class AccountManager extends Interceptor {
 
   AccountManager();
 
-  String blockServer = GStorage.blockServer;
+  String blockServer = Pref.blockServer;
 
   static String getCookies(List<Cookie> cookies) {
     // Sort cookies by path (longer path first).
@@ -94,99 +153,111 @@ class AccountManager extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     final path = options.path;
 
-    if (_skipCookie(path)) return handler.next(options);
+    late final Account account = options.extra['account'] ?? _findAccount(path);
 
-    final Account account = options.extra['account'] ?? _findAccount(path);
+    if (account is NoAccount || _skipCookie(path)) return handler.next(options);
 
-    if (account.isLogin) {
-      options.headers.addAll(account.headers);
-    } else if (path == Api.heartBeat) {
+    if (!account.isLogin && path == Api.heartBeat) {
       return handler.reject(
-          DioException.requestCancelled(requestOptions: options, reason: null),
-          false);
+        DioException.requestCancelled(requestOptions: options, reason: null),
+        false,
+      );
     }
+
+    options.headers
+      ..addAll(account.headers)
+      ..['referer'] ??= HttpString.baseUrl;
 
     // app端不需要管理cookie
     if (path.startsWith(HttpString.appBaseUrl)) {
       // if (kDebugMode) debugPrint('is app: ${options.path}');
       // bytes是grpc响应
       if (options.responseType != ResponseType.bytes) {
-        final dataPtr = (options.method == 'POST' && options.data is Map
-                ? options.data as Map
-                : options.queryParameters)
-            .cast<String, dynamic>();
+        final dataPtr =
+            (options.method == 'POST' && options.data is Map
+                    ? options.data as Map
+                    : options.queryParameters)
+                .cast<String, dynamic>();
         if (dataPtr.isNotEmpty) {
           if (!account.accessKey.isNullOrEmpty) {
             dataPtr['access_key'] = account.accessKey!;
           }
-          dataPtr['ts'] ??=
-              (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
-          Utils.appSign(dataPtr);
+          dataPtr['ts'] ??= (DateTime.now().millisecondsSinceEpoch ~/ 1000)
+              .toString();
+          AppSign.appSign(dataPtr);
           // if (kDebugMode) debugPrint(dataPtr.toString());
         }
       }
       return handler.next(options);
     } else {
-      if (account is AnonymousAccount && options.extra['checkReply'] == true) {
-        options.headers[HttpHeaders.cookieHeader] = '';
-        handler.next(options);
-        return;
-      }
-      account.cookieJar.loadForRequest(options.uri).then((cookies) {
-        final previousCookies =
-            options.headers[HttpHeaders.cookieHeader] as String?;
-        final newCookies = getCookies([
-          ...?previousCookies
-              ?.split(';')
-              .where((e) => e.isNotEmpty)
-              .map((c) => Cookie.fromSetCookieValue(c)),
-          ...cookies,
-        ]);
-        options.headers[HttpHeaders.cookieHeader] =
-            newCookies.isNotEmpty ? newCookies : '';
-        handler.next(options);
-      }).catchError((dynamic e, StackTrace s) {
-        final err = DioException(
-          requestOptions: options,
-          error: e,
-          stackTrace: s,
-        );
-        handler.reject(err, true);
-      });
+      account.cookieJar
+          .loadForRequest(options.uri)
+          .then((cookies) {
+            final previousCookies =
+                options.headers[HttpHeaders.cookieHeader] as String?;
+            final newCookies = getCookies([
+              ...?previousCookies
+                  ?.split(';')
+                  .where((e) => e.isNotEmpty)
+                  .map(Cookie.fromSetCookieValue),
+              ...cookies,
+            ]);
+            options.headers[HttpHeaders.cookieHeader] = newCookies.isNotEmpty
+                ? newCookies
+                : '';
+            handler.next(options);
+          })
+          .catchError((dynamic e, StackTrace s) {
+            final err = DioException(
+              requestOptions: options,
+              error: e,
+              stackTrace: s,
+            );
+            handler.reject(err, true);
+          });
     }
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    final path = response.requestOptions.path;
-    if (path.startsWith(HttpString.appBaseUrl) || _skipCookie(path)) {
+    final options = response.requestOptions;
+    final path = options.path;
+    if (path.startsWith(HttpString.appBaseUrl) ||
+        _skipCookie(path) ||
+        options.extra['account'] is NoAccount) {
       return handler.next(response);
     } else {
-      _saveCookies(response)
-          .whenComplete(() => handler.next(response))
-          .catchError(
-        (dynamic e, StackTrace s) {
-          final error = DioException(
-            requestOptions: response.requestOptions,
-            error: e,
-            stackTrace: s,
-          );
-          handler.reject(error, true);
-        },
-      );
+      final future = _saveCookies(
+        response,
+      ).whenComplete(() => handler.next(response));
+      assert(() {
+        future.catchError(
+          (Object e, StackTrace s) {
+            throw DioException(
+              requestOptions: response.requestOptions,
+              error: e,
+              stackTrace: s,
+            );
+          },
+        );
+        return true;
+      }());
     }
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (err.requestOptions.responseType == ResponseType.stream) {
+      return handler.next(err);
+    }
     if (err.requestOptions.method != 'POST') {
       toast(err);
     }
     if (err.response != null &&
         !err.response!.requestOptions.path.startsWith(HttpString.appBaseUrl)) {
-      _saveCookies(err.response!)
-          .whenComplete(() => handler.next(err))
-          .catchError(
+      _saveCookies(
+        err.response!,
+      ).whenComplete(() => handler.next(err)).catchError(
         (dynamic e, StackTrace s) {
           final error = DioException(
             requestOptions: err.response!.requestOptions,
@@ -224,7 +295,8 @@ class AccountManager extends Interceptor {
   }
 
   Future<void> _saveCookies(Response response) async {
-    final Account account = response.requestOptions.extra['account'] ??
+    final Account account =
+        response.requestOptions.extra['account'] ??
         _findAccount(response.requestOptions.path);
     final setCookies = response.headers[HttpHeaders.setCookieHeader];
     if (setCookies == null || setCookies.isEmpty) {
@@ -234,7 +306,7 @@ class AccountManager extends Interceptor {
         .map((str) => str.split(_setCookieReg))
         .expand((cookie) => cookie)
         .where((cookie) => cookie.isNotEmpty)
-        .map((str) => Cookie.fromSetCookieValue(str))
+        .map(Cookie.fromSetCookieValue)
         .toList();
     final statusCode = response.statusCode ?? 0;
     final locations = response.headers[HttpHeaders.locationHeader] ?? [];
@@ -265,9 +337,12 @@ class AccountManager extends Interceptor {
 
   Account _findAccount(String path) => loginApi.contains(path)
       ? AnonymousAccount()
-      : Accounts.get(AccountType.values.firstWhere(
-          (i) => apiTypeSet[i]?.contains(path) == true,
-          orElse: () => AccountType.main));
+      : Accounts.get(
+          AccountType.values.firstWhere(
+            (i) => apiTypeSet[i]?.contains(path) == true,
+            orElse: () => AccountType.main,
+          ),
+        );
 
   static Future<String> dioError(DioException error) async {
     switch (error.type) {
@@ -286,13 +361,19 @@ class AccountManager extends Interceptor {
       case DioExceptionType.sendTimeout:
         return '发送请求超时，请检查网络设置';
       case DioExceptionType.unknown:
-        final String res =
-            (await Connectivity().checkConnectivity()).first.title;
-        return '$res网络异常 ${error.error}';
+        String desc;
+        try {
+          desc = Utils.isMobile
+              ? (await Connectivity().checkConnectivity()).first.desc
+              : '';
+        } catch (_) {
+          desc = '';
+        }
+        return '$desc网络异常 ${error.error}';
     }
   }
 }
 
 extension _ConnectivityResultExt on ConnectivityResult {
-  String get title => const ['蓝牙', 'Wi-Fi', '局域', '流量', '无', '代理', '其他'][index];
+  String get desc => const ['蓝牙', 'Wi-Fi', '局域', '流量', '无', '代理', '其他'][index];
 }

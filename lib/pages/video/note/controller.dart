@@ -7,9 +7,8 @@ import 'package:get/get.dart';
 
 class NoteListPageCtr
     extends CommonListController<VideoNoteData, VideoNoteItemModel> {
-  NoteListPageCtr({this.oid, this.upperMid});
-  final dynamic oid;
-  final dynamic upperMid;
+  NoteListPageCtr({required this.oid});
+  final int oid;
 
   RxInt count = (-1).obs;
 
@@ -27,7 +26,8 @@ class NoteListPageCtr
 
   @override
   void checkIsEnd(int length) {
-    if (count.value != -1 && length >= count.value) {
+    final count = this.count.value;
+    if (count != -1 && length >= count) {
       isEnd = true;
     }
   }
@@ -36,7 +36,6 @@ class NoteListPageCtr
   Future<LoadingState<VideoNoteData>> customGetData() =>
       VideoHttp.getVideoNoteList(
         oid: oid,
-        uperMid: upperMid,
         page: page,
       );
 }

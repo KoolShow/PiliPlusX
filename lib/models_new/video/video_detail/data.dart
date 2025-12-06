@@ -9,7 +9,6 @@ import 'package:PiliPlus/models_new/video/video_detail/stat.dart';
 import 'package:PiliPlus/models_new/video/video_detail/subtitle.dart';
 import 'package:PiliPlus/models_new/video/video_detail/ugc_season.dart';
 import 'package:PiliPlus/models_new/video/video_detail/user_garb.dart';
-import 'package:PiliPlus/utils/app_scheme.dart';
 
 class VideoDetailData {
   String? bvid;
@@ -30,7 +29,7 @@ class VideoDetailData {
   int? duration;
   Rights? rights;
   Owner? owner;
-  Stat? stat;
+  VideoStat? stat;
   ArgueInfo? argueInfo;
   String? dynam1c;
   int? cid;
@@ -56,8 +55,8 @@ class VideoDetailData {
   bool? disableShowUpInfo;
   int? isStoryPlay;
   bool? isViewSelf;
-  String? epId;
   List<Staff>? staff;
+  String? redirectUrl;
   bool isPageReversed = false;
 
   VideoDetailData({
@@ -105,8 +104,8 @@ class VideoDetailData {
     this.disableShowUpInfo,
     this.isStoryPlay,
     this.isViewSelf,
-    this.epId,
     this.staff,
+    this.redirectUrl,
   });
 
   factory VideoDetailData.fromJson(Map<String, dynamic> json) =>
@@ -137,7 +136,7 @@ class VideoDetailData {
             : Owner.fromJson(json['owner'] as Map<String, dynamic>),
         stat: json['stat'] == null
             ? null
-            : Stat.fromJson(json['stat'] as Map<String, dynamic>),
+            : VideoStat.fromJson(json['stat'] as Map<String, dynamic>),
         argueInfo: json['argue_info'] == null
             ? null
             : ArgueInfo.fromJson(json['argue_info'] as Map<String, dynamic>),
@@ -178,10 +177,6 @@ class VideoDetailData {
         staff: (json["staff"] as List?)
             ?.map((item) => Staff.fromJson(item))
             .toList(),
-        epId: json['redirect_url'] == null
-            ? null
-            : PiliScheme.uriDigitRegExp
-                .firstMatch(json['redirect_url'])
-                ?.group(1),
+        redirectUrl: json['redirect_url'],
       );
 }

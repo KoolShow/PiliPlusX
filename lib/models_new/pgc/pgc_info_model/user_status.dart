@@ -10,6 +10,7 @@ class UserStatus {
   int? payPackPaid;
   int? sponsor;
   UserProgress? progress;
+  int? favored;
 
   UserStatus({
     this.areaLimit,
@@ -21,19 +22,21 @@ class UserStatus {
     this.payPackPaid,
     this.sponsor,
     this.progress,
+    this.favored,
   });
 
   factory UserStatus.fromJson(Map<String, dynamic> json) => UserStatus(
-        areaLimit: json['area_limit'] as int?,
-        banAreaShow: json['ban_area_show'] as int?,
-        follow: json['follow'] as int?,
-        followStatus: json['follow_status'] as int?,
-        login: json['login'] as int?,
-        pay: json['pay'] as int?,
-        payPackPaid: json['pay_pack_paid'] as int?,
-        sponsor: json['sponsor'] as int?,
-        progress: json['progress'] == null
-            ? null
-            : UserProgress.fromJson(json['progress']),
-      );
+    areaLimit: json['area_limit'] as int?,
+    banAreaShow: json['ban_area_show'] as int?,
+    follow: json['follow'] as int?,
+    followStatus: json['follow_status'] as int?,
+    login: json['login'] as int?,
+    pay: json['pay'] as int?,
+    payPackPaid: json['pay_pack_paid'] as int?,
+    sponsor: json['sponsor'] as int?,
+    progress: json['progress'] == null
+        ? null
+        : UserProgress.fromJson(json['progress']),
+    favored: json['favored'] as int?,
+  );
 }

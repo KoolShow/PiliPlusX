@@ -5,10 +5,11 @@ import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/models/common/home_tab_type.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
-import 'package:PiliPlus/pages/mine/view.dart';
 import 'package:PiliPlus/services/account_service.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/wbi_sign.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -19,11 +20,11 @@ class HomeController extends GetxController
   late TabController tabController;
 
   StreamController<bool>? searchBarStream;
-  late bool hideSearchBar;
-  late bool useSideBar;
+  final bool hideSearchBar = Pref.hideSearchBar;
+  final bool useSideBar = Pref.useSideBar;
 
-  late bool enableSearchWord;
-  late RxString defaultSearch = ''.obs;
+  bool enableSearchWord = Pref.enableSearchWord;
+  late final RxString defaultSearch = ''.obs;
   late int lateCheckSearchAt = 0;
 
   ScrollOrRefreshMixin get controller => tabs[tabController.index].ctr();
@@ -37,21 +38,14 @@ class HomeController extends GetxController
   void onInit() {
     super.onInit();
 
-    hideSearchBar =
-        GStorage.setting.get(SettingBoxKey.hideSearchBar, defaultValue: true);
     if (hideSearchBar) {
       searchBarStream = StreamController<bool>.broadcast();
     }
 
-    enableSearchWord = GStorage.setting
-        .get(SettingBoxKey.enableSearchWord, defaultValue: true);
     if (enableSearchWord) {
       lateCheckSearchAt = DateTime.now().millisecondsSinceEpoch;
       querySearchDefault();
     }
-
-    useSideBar =
-        GStorage.setting.get(SettingBoxKey.useSideBar, defaultValue: false);
 
     setTabConfig();
   }
@@ -64,13 +58,16 @@ class HomeController extends GetxController
   }
 
   void setTabConfig() {
-    List<int>? localTabs = GStorage.setting.get(SettingBoxKey.tabBarSort);
-    tabs = localTabs?.map((i) => HomeTabType.values[i]).toList() ??
-        HomeTabType.values;
+    final tabs = GStorage.setting.get(SettingBoxKey.tabBarSort) as List?;
+    if (tabs != null) {
+      this.tabs = tabs.map((i) => HomeTabType.values[i]).toList();
+    } else {
+      this.tabs = HomeTabType.values;
+    }
 
     tabController = TabController(
-      initialIndex: max(0, tabs.indexOf(HomeTabType.rcmd)),
-      length: tabs.length,
+      initialIndex: max(0, this.tabs.indexOf(HomeTabType.rcmd)),
+      length: this.tabs.length,
       vsync: this,
     );
   }
@@ -83,22 +80,15 @@ class HomeController extends GetxController
 
   Future<void> querySearchDefault() async {
     try {
-      var res = await Request().get(Api.searchDefault);
+      var res = await Request().get(
+        Api.searchDefault,
+        queryParameters: await WbiSign.makSign({'web_location': 333.1365}),
+      );
       if (res.data['code'] == 0) {
         defaultSearch.value = res.data['data']?['name'] ?? '';
+        // defaultSearch.value = res.data['data']?['show_name'] ?? '';
       }
     } catch (_) {}
-  }
-
-  void showUserInfoDialog(BuildContext context) {
-    feedBack();
-    showDialog(
-      context: context,
-      useSafeArea: true,
-      builder: (context) => const Dialog(
-        child: MinePage(),
-      ),
-    );
   }
 
   @override

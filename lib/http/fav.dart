@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/common/fav_order_type.dart';
 import 'package:PiliPlus/models_new/fav/fav_article/data.dart';
 import 'package:PiliPlus/models_new/fav/fav_detail/data.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/data.dart';
@@ -9,10 +10,11 @@ import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/models_new/fav/fav_note/list.dart';
 import 'package:PiliPlus/models_new/fav/fav_pgc/data.dart';
 import 'package:PiliPlus/models_new/fav/fav_topic/data.dart';
+import 'package:PiliPlus/models_new/space/space_cheese/data.dart';
 import 'package:PiliPlus/models_new/space/space_fav/data.dart';
 import 'package:PiliPlus/models_new/sub/sub_detail/data.dart';
-import 'package:PiliPlus/utils/storage.dart' show Accounts;
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/app_sign.dart';
 import 'package:dio/dio.dart';
 
 class FavHttp {
@@ -48,13 +50,14 @@ class FavHttp {
     }
   }
 
-  static Future<LoadingState<FavDetailData>> userFavFolderDetail(
-      {required int mediaId,
-      required int pn,
-      required int ps,
-      String keyword = '',
-      String order = 'mtime',
-      int type = 0}) async {
+  static Future<LoadingState<FavDetailData>> userFavFolderDetail({
+    required int mediaId,
+    required int pn,
+    required int ps,
+    String keyword = '',
+    FavOrderType order = FavOrderType.mtime,
+    int type = 0,
+  }) async {
     var res = await Request().get(
       Api.favResourceList,
       queryParameters: {
@@ -62,34 +65,14 @@ class FavHttp {
         'pn': pn,
         'ps': ps,
         'keyword': keyword,
-        'order': order,
+        'order': order.name,
         'type': type,
         'tid': 0,
-        'platform': 'web'
+        'platform': 'web',
       },
     );
     if (res.data['code'] == 0) {
       return Success(FavDetailData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
-  }
-
-  static Future<LoadingState<SubDetailData>> favResourceList({
-    required int id,
-    required int pn,
-    required int ps,
-  }) async {
-    var res = await Request().get(
-      Api.favResourceList,
-      queryParameters: {
-        'media_id': id,
-        'ps': ps,
-        'pn': pn,
-      },
-    );
-    if (res.data['code'] == 0) {
-      return Success(SubDetailData.fromJson(res.data['data']));
     } else {
       return Error(res.data['message']);
     }
@@ -100,18 +83,20 @@ class FavHttp {
     var res = type == 11
         ? await Request().post(
             Api.unfavFolder,
-            queryParameters: {
+            data: {
               'media_id': id,
               'csrf': Accounts.main.csrf,
             },
+            options: Options(contentType: Headers.formUrlEncodedContentType),
           )
         : await Request().post(
             Api.unfavSeason,
-            queryParameters: {
+            data: {
               'platform': 'web',
               'season_id': id,
               'csrf': Accounts.main.csrf,
             },
+            options: Options(contentType: Headers.formUrlEncodedContentType),
           );
     if (res.data['code'] == 0) {
       return {'status': true};
@@ -137,6 +122,58 @@ class FavHttp {
       return Success(SubDetailData.fromJson(res.data['data']));
     } else {
       return Error(res.data['message']);
+    }
+  }
+
+  static Future<LoadingState<SpaceCheeseData>> favPugv({
+    required int mid,
+    required int page,
+  }) async {
+    var res = await Request().get(
+      Api.favPugv,
+      queryParameters: {
+        'mid': mid,
+        'ps': 20,
+        'pn': page,
+        'web_location': 333.1387,
+      },
+    );
+    if (res.data['code'] == 0) {
+      return Success(SpaceCheeseData.fromJson(res.data['data']));
+    } else {
+      return Error(res.data['message']);
+    }
+  }
+
+  static Future addFavPugv(seasonId) async {
+    var res = await Request().post(
+      Api.addFavPugv,
+      data: {
+        'season_id': seasonId,
+        'csrf': Accounts.main.csrf,
+      },
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
+    if (res.data['code'] == 0) {
+      return {'status': true};
+    } else {
+      return {'status': false, 'msg': res.data['message']};
+    }
+  }
+
+  static Future delFavPugv(seasonId) async {
+    var res = await Request().post(
+      Api.delFavPugv,
+      data: {
+        'season_id': seasonId,
+        'csrf': Accounts.main.csrf,
+      },
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
+    if (res.data['code'] == 0) {
+      return {'status': true};
+    } else {
+      return {'status': false, 'msg': res.data['message']};
     }
   }
 
@@ -310,12 +347,12 @@ class FavHttp {
 
   static Future delNote({
     required bool isPublish,
-    required List noteIds,
+    required String noteIds,
   }) async {
     final res = await Request().post(
       isPublish ? Api.delPublishNote : Api.delNote,
       data: {
-        isPublish ? 'cvids' : 'note_ids': noteIds.join(','),
+        isPublish ? 'cvids' : 'note_ids': noteIds,
         'csrf': Accounts.main.csrf,
       },
       options: Options(
@@ -340,7 +377,7 @@ class FavHttp {
       queryParameters: {
         'vmid': mid,
         'type': type,
-        if (followStatus != null) 'follow_status': followStatus,
+        'follow_status': ?followStatus,
         'pn': pn,
       },
     );
@@ -373,13 +410,13 @@ class FavHttp {
   }
 
   static Future sortFavFolder({
-    required List<int?> sort,
+    required String sort,
   }) async {
     Map<String, dynamic> data = {
-      'sort': sort.join(','),
+      'sort': sort,
       'csrf': Accounts.main.csrf,
     };
-    Utils.appSign(data);
+    AppSign.appSign(data);
     var res = await Request().post(
       Api.sortFavFolder,
       data: data,
@@ -396,14 +433,14 @@ class FavHttp {
 
   static Future sortFav({
     required dynamic mediaId,
-    required List<String> sort,
+    required String sort,
   }) async {
     Map<String, dynamic> data = {
       'media_id': mediaId,
-      'sort': sort.join(','),
+      'sort': sort,
       'csrf': Accounts.main.csrf,
     };
-    Utils.appSign(data);
+    AppSign.appSign(data);
     var res = await Request().post(
       Api.sortFav,
       data: data,
@@ -440,17 +477,19 @@ class FavHttp {
   }
 
   static Future deleteFolder({
-    required List<dynamic> mediaIds,
+    required String mediaIds,
   }) async {
-    var res = await Request().post(Api.deleteFolder,
-        data: {
-          'media_ids': mediaIds.join(','),
-          'platform': 'web',
-          'csrf': Accounts.main.csrf,
-        },
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-        ));
+    var res = await Request().post(
+      Api.deleteFolder,
+      data: {
+        'media_ids': mediaIds,
+        'platform': 'web',
+        'csrf': Accounts.main.csrf,
+      },
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+      ),
+    );
     if (res.data['code'] == 0) {
       return {'status': true, 'data': res.data['data']};
     } else {
@@ -466,18 +505,20 @@ class FavHttp {
     required String cover,
     required String intro,
   }) async {
-    var res = await Request().post(isAdd ? Api.addFolder : Api.editFolder,
-        data: {
-          'title': title,
-          'intro': intro,
-          'privacy': privacy,
-          'cover': cover.isNotEmpty ? Uri.encodeFull(cover) : cover,
-          'csrf': Accounts.main.csrf,
-          if (mediaId != null) 'media_id': mediaId,
-        },
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-        ));
+    var res = await Request().post(
+      isAdd ? Api.addFolder : Api.editFolder,
+      data: {
+        'title': title,
+        'intro': intro,
+        'privacy': privacy,
+        'cover': cover.isNotEmpty ? Uri.encodeFull(cover) : cover,
+        'csrf': Accounts.main.csrf,
+        'media_id': ?mediaId,
+      },
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+      ),
+    );
     if (res.data['code'] == 0) {
       return {'status': true, 'data': FavFolderInfo.fromJson(res.data['data'])};
     } else {
@@ -531,19 +572,20 @@ class FavHttp {
   static Future<LoadingState<List<SpaceFavData>?>> spaceFav({
     required int mid,
   }) async {
-    Map<String, String> data = {
-      'build': '8430300',
+    final params = {
+      'build': 8430300,
+      'version': '8.43.0',
       'c_locale': 'zh_CN',
-      'channel': 'bili',
+      'channel': 'master',
       'mobi_app': 'android',
       'platform': 'android',
       's_locale': 'zh_CN',
       'statistics': Constants.statisticsApp,
-      'up_mid': mid.toString(),
+      'up_mid': mid,
     };
     var res = await Request().get(
       Api.spaceFav,
-      queryParameters: data,
+      queryParameters: params,
       options: Options(
         headers: {
           'bili-http-engine': 'cronet',
@@ -552,9 +594,11 @@ class FavHttp {
       ),
     );
     if (res.data['code'] == 0) {
-      return Success((res.data['data'] as List?)
-          ?.map((e) => SpaceFavData.fromJson(e))
-          .toList());
+      return Success(
+        (res.data['data'] as List?)
+            ?.map((e) => SpaceFavData.fromJson(e))
+            .toList(),
+      );
     } else {
       return Error(res.data['message']);
     }
@@ -572,7 +616,7 @@ class FavHttp {
       data: {
         "entity": {
           "object_id_str": opusId,
-          "type": {"biz": 2}
+          "type": {"biz": 2},
         },
         "action": action, // 3 fav, 4 unfav
       },
@@ -585,39 +629,15 @@ class FavHttp {
   }
 
   // （取消）收藏
-  static Future delFav({
-    List? ids,
-    String? delIds,
-  }) async {
-    var res = await Request().post(
-      Api.delFav,
-      data: {
-        'resources': ids?.join(','),
-        'media_id': delIds,
-        'platform': 'web',
-        'csrf': Accounts.main.csrf,
-      },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {'status': false, 'msg': res.data['message']};
-    }
-  }
-
-  // （取消）收藏
   static Future favVideo({
-    int? aid,
+    required String resources,
     String? addIds,
     String? delIds,
-    int? type,
   }) async {
     var res = await Request().post(
       Api.favVideo,
       data: {
-        'rid': aid,
-        'type': type ?? 2,
+        'resources': resources,
         'add_media_ids': addIds ?? '',
         'del_media_ids': delIds ?? '',
         'csrf': Accounts.main.csrf,
@@ -631,53 +651,74 @@ class FavHttp {
     }
   }
 
-  static Future copyOrMoveFav({
+  // （取消）收藏
+  static Future unfavAll({
+    required rid,
+    required type,
+  }) async {
+    var res = await Request().post(
+      Api.unfavAll,
+      data: {
+        'rid': rid,
+        'type': type,
+        'csrf': Accounts.main.csrf,
+      },
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
+    if (res.data['code'] == 0) {
+      return {'status': true, 'data': res.data['data']};
+    } else {
+      return {'status': false, 'msg': res.data['message']};
+    }
+  }
+
+  static Future<LoadingState> copyOrMoveFav({
     required bool isCopy,
     required bool isFav,
     required dynamic srcMediaId,
     required dynamic tarMediaId,
     dynamic mid,
-    required List resources,
+    required String resources,
   }) async {
     var res = await Request().post(
       isFav
           ? isCopy
-              ? Api.copyFav
-              : Api.moveFav
+                ? Api.copyFav
+                : Api.moveFav
           : isCopy
-              ? Api.copyToview
-              : Api.moveToview,
+          ? Api.copyToview
+          : Api.moveToview,
       data: {
-        if (srcMediaId != null) 'src_media_id': srcMediaId,
+        'src_media_id': ?srcMediaId,
         'tar_media_id': tarMediaId,
-        if (mid != null) 'mid': mid,
-        'resources': resources.join(','),
+        'mid': ?mid,
+        'resources': resources,
         'platform': 'web',
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
     if (res.data['code'] == 0) {
-      return {'status': true};
+      return const Success(null);
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      return Error(res.data['message']);
     }
   }
 
-  static Future allFavFolders(mid) async {
+  static Future<LoadingState<FavFolderData>> allFavFolders(Object mid) async {
     var res = await Request().get(
       Api.favFolder,
       queryParameters: {'up_mid': mid},
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'data': FavFolderData.fromJson(res.data['data'])};
+      return Success(FavFolderData.fromJson(res.data['data']));
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      return Error(res.data['message']);
     }
   }
 
   // 查看视频被收藏在哪个文件夹
-  static Future videoInFolder({
+  static Future<LoadingState<FavFolderData>> videoInFolder({
     dynamic mid,
     dynamic rid,
     dynamic type,
@@ -687,13 +728,13 @@ class FavHttp {
       queryParameters: {
         'up_mid': mid,
         'rid': rid,
-        if (type != null) 'type': type,
+        'type': ?type,
       },
     );
     if (res.data['code'] == 0) {
-      return {'status': true, 'data': FavFolderData.fromJson(res.data['data'])};
+      return Success(FavFolderData.fromJson(res.data['data']));
     } else {
-      return {'status': false, 'msg': res.data['message']};
+      return Error(res.data['message']);
     }
   }
 }

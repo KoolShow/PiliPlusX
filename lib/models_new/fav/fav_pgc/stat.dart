@@ -3,7 +3,7 @@ class Stat {
   int? view;
   int? danmaku;
   int? reply;
-  int? coin;
+  num? coin;
   int? seriesFollow;
   int? seriesView;
   int? likes;
@@ -22,14 +22,14 @@ class Stat {
   });
 
   factory Stat.fromJson(Map<String, dynamic> json) => Stat(
-        follow: json['follow'] as int?,
-        view: json['view'] as int?,
-        danmaku: json['danmaku'] as int?,
-        reply: json['reply'] as int?,
-        coin: json['coin'] as int?,
-        seriesFollow: json['series_follow'] as int?,
-        seriesView: json['series_view'] as int?,
-        likes: json['likes'] as int?,
-        favorite: json['favorite'] as int?,
-      );
+    follow: json['follow'] as int?,
+    view: json['view'] as int?,
+    danmaku: json['danmaku'] as int?,
+    reply: json['reply'] as int?,
+    coin: json['coin'] as num?,
+    seriesFollow: json['series_follow'] as int?,
+    seriesView: json['series_view'] as int?,
+    likes: json['likes'] as int?,
+    favorite: json['favorite'] as int?,
+  );
 }

@@ -1,11 +1,12 @@
 import 'package:PiliPlus/models_new/article/article_info/share_channel.dart';
 import 'package:PiliPlus/models_new/article/article_info/stats.dart';
+import 'package:PiliPlus/utils/extension.dart';
 
 class ArticleInfoData {
   int? like;
   bool? attention;
   bool? favorite;
-  int? coin;
+  num? coin;
   Stats? stats;
   String? title;
   String? bannerUrl;
@@ -57,7 +58,7 @@ class ArticleInfoData {
         like: json['like'] as int?,
         attention: json['attention'] as bool?,
         favorite: json['favorite'] as bool?,
-        coin: json['coin'] as int?,
+        coin: json['coin'] as num?,
         stats: json['stats'] == null
             ? null
             : Stats.fromJson(json['stats'] as Map<String, dynamic>),
@@ -66,8 +67,8 @@ class ArticleInfoData {
         mid: json['mid'] as int?,
         authorName: json['author_name'] as String?,
         isAuthor: json['is_author'] as bool?,
-        imageUrls: (json['image_urls'] as List?)?.cast(),
-        originImageUrls: (json['origin_image_urls'] as List?)?.cast(),
+        imageUrls: (json['image_urls'] as List?)?.fromCast(),
+        originImageUrls: (json['origin_image_urls'] as List?)?.fromCast(),
         shareable: json['shareable'] as bool?,
         showLaterWatch: json['show_later_watch'] as bool?,
         showSmallWindow: json['show_small_window'] as bool?,

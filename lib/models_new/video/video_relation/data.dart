@@ -4,7 +4,7 @@ class VideoRelation {
   bool? seasonFav;
   bool? like;
   bool? dislike;
-  int? coin;
+  num? coin;
 
   VideoRelation({
     this.attention,
@@ -16,11 +16,11 @@ class VideoRelation {
   });
 
   factory VideoRelation.fromJson(Map<String, dynamic> json) => VideoRelation(
-        attention: json['attention'] as bool?,
-        favorite: json['favorite'] as bool?,
-        seasonFav: json['season_fav'] as bool?,
-        like: json['like'] as bool?,
-        dislike: json['dislike'] as bool?,
-        coin: json['coin'] as int?,
-      );
+    attention: json['attention'] as bool?,
+    favorite: json['favorite'] as bool?,
+    seasonFav: json['season_fav'] as bool?,
+    like: json['like'] as bool?,
+    dislike: json['dislike'] as bool?,
+    coin: json['coin'] as num?,
+  );
 }

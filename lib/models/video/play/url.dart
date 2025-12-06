@@ -1,5 +1,10 @@
+import 'dart:math' show max, min;
+
 import 'package:PiliPlus/models/common/video/audio_quality.dart';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
+import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
+import 'package:PiliPlus/utils/extension.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 class PlayUrlModel {
   PlayUrlModel({
@@ -36,8 +41,12 @@ class PlayUrlModel {
   Dash? dash;
   List<Durl>? durl;
   List<FormatItem>? supportFormats;
+  Volume? volume;
   int? lastPlayTime;
   int? lastPlayCid;
+  String? curLanguage;
+  Language? language;
+  List<SegmentItemModel>? clipInfoList;
 
   PlayUrlModel.fromJson(Map<String, dynamic> json) {
     from = json['from'];
@@ -48,8 +57,9 @@ class PlayUrlModel {
     timeLength = json['timelength'];
     acceptFormat = json['accept_format'];
     acceptDesc = json['accept_description'];
-    acceptQuality =
-        (json['accept_quality'] as List?)?.map<int>((e) => e as int).toList();
+    acceptQuality = (json['accept_quality'] as List?)
+        ?.map<int>((e) => e as int)
+        .toList();
     videoCodecid = json['video_codecid'];
     seekParam = json['seek_param'];
     seekType = json['seek_type'];
@@ -58,8 +68,79 @@ class PlayUrlModel {
     supportFormats = (json['support_formats'] as List?)
         ?.map<FormatItem>((e) => FormatItem.fromJson(e))
         .toList();
+    volume = json['volume'] == null ? null : Volume.fromJson(json['volume']);
     lastPlayTime = json['last_play_time'];
     lastPlayCid = json['last_play_cid'];
+    curLanguage = json['cur_language'];
+    language = json['language'] == null
+        ? null
+        : Language.fromJson(json['language']);
+    // debug
+    // final clipInfoList = [
+    //   {
+    //     "start": 0,
+    //     "end": 150,
+    //     "clipType": "CLIP_TYPE_OP",
+    //   },
+    //   {
+    //     "start": timeLength! ~/ 1000 - 150,
+    //     "end": timeLength! ~/ 1000,
+    //     "clipType": "CLIP_TYPE_ED",
+    //   },
+    // ];
+    try {
+      final List? clipInfoList = json['clip_info_list'];
+      if (clipInfoList != null && clipInfoList.isNotEmpty) {
+        this.clipInfoList = clipInfoList
+            .map((e) => SegmentItemModel.fromPgcJson(e, timeLength))
+            .toList();
+      }
+    } catch (_) {
+      if (kDebugMode) rethrow;
+    }
+  }
+}
+
+class Language {
+  Language({
+    this.support,
+    this.items,
+  });
+
+  bool? support;
+  List<LanguageItem>? items;
+
+  Language.fromJson(Map<String, dynamic> json) {
+    support = json['support'];
+    items =
+        (json['items'] as List?)?.map((e) => LanguageItem.fromJson(e)).toList()
+          ?..sort((a, b) {
+            final aHasZh = a.lang?.contains('zh') ?? false;
+            final bHasZh = b.lang?.contains('zh') ?? false;
+            if (aHasZh != bHasZh) return aHasZh ? -1 : 1;
+            if (a.isAi != b.isAi) return a.isAi ? 1 : -1;
+            return 0;
+          });
+  }
+}
+
+class LanguageItem {
+  LanguageItem({
+    this.lang,
+    this.title,
+    this.subtitleLang,
+  });
+
+  String? lang;
+  String? title;
+  String? subtitleLang;
+  bool isAi = false;
+
+  LanguageItem.fromJson(Map<String, dynamic> json) {
+    lang = json['lang'];
+    isAi = json['production_type'] == 2;
+    title = '${json['title']}${isAi ? '（AI）' : ''}';
+    subtitleLang = json['subtitle_lang'];
   }
 }
 
@@ -69,16 +150,12 @@ class Dash {
     this.minBufferTime,
     this.video,
     this.audio,
-    this.dolby,
-    this.flac,
   });
 
   int? duration;
   double? minBufferTime;
   List<VideoItem>? video;
   List<AudioItem>? audio;
-  Dolby? dolby;
-  Flac? flac;
 
   Dash.fromJson(Map<String, dynamic> json) {
     duration = json['duration'];
@@ -89,8 +166,16 @@ class Dash {
     audio = (json['audio'] as List?)
         ?.map<AudioItem>((e) => AudioItem.fromJson(e))
         .toList();
-    dolby = json['dolby'] != null ? Dolby.fromJson(json['dolby']) : null;
-    flac = json['flac'] != null ? Flac.fromJson(json['flac']) : null;
+    if (json['dolby']?['audio'] case List list) {
+      (audio ??= <AudioItem>[]).insertAll(
+        0,
+        list.map((e) => AudioItem.fromJson(e)),
+      );
+    }
+    final flacAudio = json['flac']?['audio'];
+    if (flacAudio != null) {
+      (audio ??= <AudioItem>[]).insert(0, AudioItem.fromJson(flacAudio));
+    }
   }
 }
 
@@ -121,25 +206,20 @@ class Durl {
       ahead: json['ahead'],
       vhead: json['vhead'],
       url: json['url'],
-      backupUrl: json['backup_url'] != null
-          ? List<String>.from(json['backup_url'])
-          : [],
+      backupUrl: (json['backup_url'] as List?)?.fromCast<String>(),
     );
   }
-}
 
-final _ipRegExp = RegExp(r'^https?://\d{1,3}\.\d{1,3}');
-
-bool _isMCDNorPCDN(String url) {
-  return url.contains("szbdyd.com") ||
-      url.contains(".mcdn.bilivideo") ||
-      _ipRegExp.hasMatch(url);
+  Iterable<String> get playUrls sync* {
+    if (url?.isNotEmpty == true) yield url!;
+    if (backupUrl?.isNotEmpty == true) yield* backupUrl!;
+  }
 }
 
 abstract class BaseItem {
   int? id;
   String? baseUrl;
-  String? backupUrl;
+  List<String>? backupUrl;
   int? bandWidth;
   String? mimeType;
   String? codecs;
@@ -169,22 +249,24 @@ abstract class BaseItem {
 
   BaseItem.fromJson(Map<String, dynamic> json) {
     id = json['id'];
-    baseUrl = json['baseUrl'];
-    final backupUrls = (json['backupUrl'] as List?)?.cast<String>() ?? [];
-    backupUrl = backupUrls.isNotEmpty
-        ? backupUrls.firstWhere((i) => !_isMCDNorPCDN(i),
-            orElse: () => backupUrls.first)
-        : null;
-    bandWidth = json['bandWidth'];
+    baseUrl = json['baseUrl'] ?? json['base_url'];
+    backupUrl = ((json['backupUrl'] ?? json['backup_url']) as List?)
+        ?.fromCast<String>();
+    bandWidth = json['bandWidth'] ?? json['bandwidth'];
     mimeType = json['mime_type'];
     codecs = json['codecs'];
     width = json['width'];
     height = json['height'];
-    frameRate = json['frameRate'];
+    frameRate = json['frameRate'] ?? json['frame_rate'];
     sar = json['sar'];
-    startWithSap = json['startWithSap'];
-    segmentBase = json['segmentBase'];
+    startWithSap = json['startWithSap'] ?? json['start_with_sap'];
+    segmentBase = json['segmentBase'] ?? json['segment_base'];
     codecid = json['codecid'];
+  }
+
+  Iterable<String> get playUrls sync* {
+    if (baseUrl?.isNotEmpty == true) yield baseUrl!;
+    if (backupUrl?.isNotEmpty == true) yield* backupUrl!;
   }
 }
 
@@ -219,7 +301,7 @@ class AudioItem extends BaseItem {
   AudioItem();
 
   AudioItem.fromJson(Map<String, dynamic> json) : super.fromJson(json) {
-    quality = AudioQuality.fromCode(json['id']).description;
+    quality = AudioQuality.fromCode(json['id']).desc;
   }
 }
 
@@ -236,43 +318,68 @@ class FormatItem {
   String? format;
   String? newDesc;
   String? displayDesc;
-  List? codecs;
+  List<String>? codecs;
 
   FormatItem.fromJson(Map<String, dynamic> json) {
     quality = json['quality'];
     format = json['format'];
     newDesc = json['new_description'];
     displayDesc = json['display_desc'];
-    codecs = json['codecs'];
+    codecs = (json['codecs'] as List?)?.fromCast<String>();
   }
 }
 
-class Dolby {
-  Dolby({
-    this.type,
-    this.audio,
+class Volume {
+  Volume({
+    required this.measuredI,
+    required this.measuredLra,
+    required this.measuredTp,
+    required this.measuredThreshold,
+    required this.targetOffset,
+    required this.targetI,
+    required this.targetTp,
+    // required this.multiSceneArgs,
   });
 
-  // 1：普通杜比音效 2：全景杜比音效
-  int? type;
-  List<AudioItem>? audio;
+  final num measuredI;
+  final num measuredLra;
+  final num measuredTp;
+  final num measuredThreshold;
+  final num targetOffset;
+  final num targetI;
+  final num targetTp;
 
-  Dolby.fromJson(Map<String, dynamic> json) {
-    type = json['type'];
-    audio = (json['audio'] as List?)
-        ?.map<AudioItem>((e) => AudioItem.fromJson(e))
-        .toList();
+  // final MultiSceneArgs? multiSceneArgs;
+
+  factory Volume.fromJson(Map<String, dynamic> json) {
+    return Volume(
+      measuredI: json["measured_i"] ?? 0,
+      measuredLra: json["measured_lra"] ?? 0,
+      measuredTp: json["measured_tp"] ?? 0,
+      measuredThreshold: json["measured_threshold"] ?? 0,
+      targetOffset: json["target_offset"] ?? 0,
+      targetI: json["target_i"] ?? 0,
+      targetTp: json["target_tp"] ?? 0,
+      // multiSceneArgs: json["multi_scene_args"] == null ? null : MultiSceneArgs.fromJson(json["multi_scene_args"]),
+    );
   }
-}
 
-class Flac {
-  Flac({this.display, this.audio});
-
-  bool? display;
-  AudioItem? audio;
-
-  Flac.fromJson(Map<String, dynamic> json) {
-    display = json['display'];
-    audio = json['audio'] != null ? AudioItem.fromJson(json['audio']) : null;
+  String format(Map<String, num> config) {
+    final lra = max(config['lra'] ?? 11, measuredLra);
+    num i = config['i'] ?? targetI;
+    final tp = min(config['tp'] ?? targetTp, measuredTp);
+    final offset = config['offset'] ?? targetOffset;
+    num measuredI = this.measuredI;
+    if (measuredI > 0) {
+      i -= measuredI;
+      measuredI = 0;
+    }
+    return 'LRA=$lra:I=$i:TP=$tp:offset=$offset:linear=true:measured_I=$measuredI:measured_LRA=$measuredLra:measured_TP=$measuredTp:measured_thresh=$measuredThreshold';
   }
+
+  bool get isNotEmpty =>
+      measuredI != 0 ||
+      measuredLra != 0 ||
+      measuredTp != 0 ||
+      measuredThreshold != 0;
 }

@@ -1,4 +1,5 @@
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
@@ -18,7 +19,7 @@ class _SetDisplayModeState extends State<SetDisplayMode> {
   DisplayMode? active;
   DisplayMode? preferred;
 
-  Box get setting => GStorage.setting;
+  Box setting = GStorage.setting;
 
   @override
   void initState() {
@@ -52,28 +53,40 @@ class _SetDisplayModeState extends State<SetDisplayMode> {
     preferred ??= DisplayMode.auto;
 
     FlutterDisplayMode.setPreferredMode(preferred!).whenComplete(() {
-      Future.delayed(const Duration(milliseconds: 100)).whenComplete(fetchAll);
+      Future.delayed(const Duration(milliseconds: 100), fetchAll);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text('屏幕帧率设置')),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 25, top: 10, bottom: 5),
-              child: Text(
-                '没有生效？重启app试试',
-                style: TextStyle(color: Theme.of(context).colorScheme.outline),
-              ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding:
+                MediaQuery.viewPaddingOf(context).copyWith(top: 0, bottom: 0) +
+                const EdgeInsets.only(left: 25, top: 10, bottom: 5),
+            child: Text(
+              '没有生效？重启app试试',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
             ),
-            Expanded(
+          ),
+          Expanded(
+            child: RadioGroup(
+              onChanged: (DisplayMode? newMode) {
+                FlutterDisplayMode.setPreferredMode(
+                  newMode!,
+                ).whenComplete(
+                  () => Future.delayed(
+                    const Duration(milliseconds: 100),
+                    fetchAll,
+                  ),
+                );
+              },
+              groupValue: preferred,
               child: ListView.builder(
                 itemCount: modes.length,
                 itemBuilder: (context, index) {
@@ -83,19 +96,12 @@ class _SetDisplayModeState extends State<SetDisplayMode> {
                     title: mode == DisplayMode.auto
                         ? const Text('自动')
                         : Text('$mode${mode == active ? '  [系统]' : ''}'),
-                    groupValue: preferred,
-                    onChanged: (DisplayMode? newMode) {
-                      FlutterDisplayMode.setPreferredMode(newMode!)
-                          .whenComplete(() =>
-                              Future.delayed(const Duration(milliseconds: 100))
-                                  .whenComplete(fetchAll));
-                    },
                   );
                 },
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

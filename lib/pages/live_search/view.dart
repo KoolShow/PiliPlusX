@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/scroll_physics.dart';
+import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/models/common/live_search_type.dart';
 import 'package:PiliPlus/pages/live_search/child/view.dart';
 import 'package:PiliPlus/pages/live_search/controller.dart';
@@ -14,8 +15,10 @@ class LiveSearchPage extends StatefulWidget {
 }
 
 class _LiveSearchPageState extends State<LiveSearchPage> {
-  final _controller =
-      Get.put(LiveSearchController(), tag: Utils.generateRandomString(8));
+  final _controller = Get.put(
+    LiveSearchController(),
+    tag: Utils.generateRandomString(8),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +31,7 @@ class _LiveSearchPageState extends State<LiveSearchPage> {
             onPressed: _controller.submit,
             icon: const Icon(Icons.search, size: 22),
           ),
-          const SizedBox(width: 10)
+          const SizedBox(width: 10),
         ],
         title: TextField(
           autofocus: true,
@@ -53,9 +56,7 @@ class _LiveSearchPageState extends State<LiveSearchPage> {
           },
         ),
       ),
-      body: SafeArea(
-        top: false,
-        bottom: false,
+      body: ViewSafeArea(
         child: Obx(() {
           return Opacity(
             opacity: _controller.hasData.value ? 1 : 0,
@@ -88,21 +89,18 @@ class _LiveSearchPageState extends State<LiveSearchPage> {
                   },
                 ),
                 Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: tabBarView(
-                      controller: _controller.tabController,
-                      children: [
-                        LiveSearchChildPage(
-                          controller: _controller.roomCtr,
-                          searchType: LiveSearchType.room,
-                        ),
-                        LiveSearchChildPage(
-                          controller: _controller.userCtr,
-                          searchType: LiveSearchType.user,
-                        ),
-                      ],
-                    ),
+                  child: tabBarView(
+                    controller: _controller.tabController,
+                    children: [
+                      LiveSearchChildPage(
+                        controller: _controller.roomCtr,
+                        searchType: LiveSearchType.room,
+                      ),
+                      LiveSearchChildPage(
+                        controller: _controller.userCtr,
+                        searchType: LiveSearchType.user,
+                      ),
+                    ],
                   ),
                 ),
               ],

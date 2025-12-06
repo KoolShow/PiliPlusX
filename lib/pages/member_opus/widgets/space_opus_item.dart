@@ -1,25 +1,27 @@
+import 'package:PiliPlus/common/widgets/flutter/dyn/ink_well.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/space/space_opus/item.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide InkWell;
 
 class SpaceOpusItem extends StatelessWidget {
   const SpaceOpusItem({
     super.key,
     required this.item,
+    required this.maxWidth,
   });
 
   final SpaceOpusItemModel item;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
     final hasPic = item.cover?.url?.isNotEmpty == true;
     return Card(
       clipBehavior: Clip.hardEdge,
-      margin: EdgeInsets.zero,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(6)),
       ),
@@ -32,16 +34,12 @@ class SpaceOpusItem extends StatelessWidget {
             if (hasPic)
               Stack(
                 children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return NetworkImgLayer(
-                        width: constraints.maxWidth,
-                        height: constraints.maxWidth * item.cover!.ratio,
-                        src: item.cover!.url,
-                        type: ImageType.emote,
-                        quality: 60,
-                      );
-                    },
+                  NetworkImgLayer(
+                    width: maxWidth,
+                    height: maxWidth * item.cover!.ratio,
+                    src: item.cover!.url,
+                    type: ImageType.emote,
+                    quality: 60,
                   ),
                   Positioned(
                     left: 0,
@@ -69,8 +67,10 @@ class SpaceOpusItem extends StatelessWidget {
               ),
             if (item.content?.isNotEmpty == true)
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
                 child: Text(
                   item.content!,
                   maxLines: hasPic ? 4 : 6,

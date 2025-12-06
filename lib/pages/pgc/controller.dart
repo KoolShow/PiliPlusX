@@ -9,7 +9,7 @@ import 'package:PiliPlus/models_new/pgc/pgc_timeline/result.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/utils/extension.dart';
-import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -19,7 +19,7 @@ class PgcController
   final HomeTabType tabType;
 
   late final showPgcTimeline =
-      tabType == HomeTabType.bangumi && GStorage.showPgcTimeline;
+      tabType == HomeTabType.bangumi && Pref.showPgcTimeline;
 
   AccountService accountService = Get.find<AccountService>();
 
@@ -60,12 +60,27 @@ class PgcController
   ScrollController? followController;
 
   // timeline
-  late Rx<LoadingState<List<Result>?>> timelineState =
-      LoadingState<List<Result>?>.loading().obs;
+  late Rx<LoadingState<List<TimelineResult>?>> timelineState =
+      LoadingState<List<TimelineResult>?>.loading().obs;
 
   Future<void> queryPgcTimeline() async {
-    final res = await PgcHttp.pgcTimeline(types: 1, before: 6, after: 6);
-    timelineState.value = res;
+    final res = await Future.wait([
+      PgcHttp.pgcTimeline(types: 1, before: 6, after: 6),
+      PgcHttp.pgcTimeline(types: 4, before: 6, after: 6),
+    ]);
+    var list1 = res.first.dataOrNull;
+    var list2 = res[1].dataOrNull;
+    if (list1 != null &&
+        list2 != null &&
+        list1.isNotEmpty &&
+        list2.isNotEmpty) {
+      for (var i = 0; i < list1.length; i++) {
+        list1[i] + list2[i];
+      }
+    } else {
+      list1 ??= list2;
+    }
+    timelineState.value = Success(list1);
   }
 
   // 我的订阅
@@ -118,9 +133,9 @@ class PgcController
 
   @override
   Future<LoadingState<List<PgcIndexItem>?>> customGetData() => PgcHttp.pgcIndex(
-        page: page,
-        indexType: tabType == HomeTabType.cinema ? 102 : null,
-      );
+    page: page,
+    indexType: tabType == HomeTabType.cinema ? 102 : null,
+  );
 
   @override
   void onClose() {

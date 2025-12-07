@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
@@ -99,20 +98,10 @@ class _MinePageState extends CommonPageState<MinePage, MineController>
                 children: [
                   _buildUserInfo(theme, secondary),
                   _buildActions(secondary),
-                  refreshIndicator(
-                    onRefresh: controller.onRefresh,
-                    child: ListView(
-                      padding: const EdgeInsets.only(bottom: 100),
-                      controller: controller.scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        Obx(
-                          () => controller.loadingState.value is Loading
-                              ? const SizedBox.shrink()
-                              : _buildFav(theme, secondary),
-                        ),
-                      ],
-                    ),
+                  Obx(
+                    () => controller.loadingState.value is Loading
+                        ? const SizedBox.shrink()
+                        : _buildFav(theme, secondary),
                   ),
                 ],
               )

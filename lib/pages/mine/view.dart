@@ -79,7 +79,7 @@ class _MinePageState extends CommonPageState<MinePage, MineController>
               const SizedBox(height: 8),
               _buildHeaderActions,
               const SizedBox(height: 10),
-              Obx(() => _buildUserInfo(theme, secondary)),
+              _buildUserInfo(theme, secondary),
             ],
           ),
         ),
@@ -90,26 +90,32 @@ class _MinePageState extends CommonPageState<MinePage, MineController>
       Column(
         children: [
           const SizedBox(height: 10),
+          _buildHeaderActions,
+          const SizedBox(height: 10),
           Expanded(
             child: Material(
               type: MaterialType.transparency,
-              child: refreshIndicator(
-                onRefresh: controller.onRefresh,
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  controller: controller.scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    _buildUserInfo(theme, secondary),
-                    _buildActions(secondary),
-                    Obx(
-                      () => controller.loadingState.value is Loading
-                          ? const SizedBox.shrink()
-                          : _buildFav(theme, secondary),
+              child: Column(
+                children: [
+                  _buildUserInfo(theme, secondary),
+                  _buildActions(secondary),
+                  refreshIndicator(
+                    onRefresh: controller.onRefresh,
+                    child: ListView(
+                      padding: const EdgeInsets.only(bottom: 100),
+                      controller: controller.scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        Obx(
+                          () => controller.loadingState.value is Loading
+                              ? const SizedBox.shrink()
+                              : _buildFav(theme, secondary),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                ],
+              )
             ),
           ),
         ],

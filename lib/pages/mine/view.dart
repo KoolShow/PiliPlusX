@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
@@ -22,15 +21,20 @@ import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class MinePage extends StatefulWidget {
-  const MinePage({super.key, this.showBackBtn = false});
+  const MinePage({
+    super.key,
+    this.showBackBtn = false,
+    this.isUserInfo = false,
+  });
 
   final bool showBackBtn;
+  final bool isUserInfo;
 
   @override
-  State<MinePage> createState() => _MediaPageState();
+  State<MinePage> createState() => _MinePageState();
 }
 
-class _MediaPageState extends CommonPageState<MinePage, MineController>
+class _MinePageState extends CommonPageState<MinePage, MineController>
     with AutomaticKeepAliveClientMixin {
   @override
   MineController controller = Get.put(MineController());
@@ -64,6 +68,23 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
     super.build(context);
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
+
+    if (widget.isUserInfo) {
+      return onBuild(
+        IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              _buildHeaderActions,
+              const SizedBox(height: 10),
+              _buildUserInfo(theme, secondary),
+            ],
+          ),
+        ),
+      );
+    }
+
     return onBuild(
       Column(
         children: [
@@ -73,23 +94,17 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
           Expanded(
             child: Material(
               type: MaterialType.transparency,
-              child: refreshIndicator(
-                onRefresh: controller.onRefresh,
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  controller: controller.scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    _buildUserInfo(theme, secondary),
-                    _buildActions(secondary),
-                    Obx(
-                      () => controller.loadingState.value is Loading
-                          ? const SizedBox.shrink()
-                          : _buildFav(theme, secondary),
-                    ),
-                  ],
-                ),
-              ),
+              child: Column(
+                children: [
+                  _buildUserInfo(theme, secondary),
+                  _buildActions(secondary),
+                  Obx(
+                    () => controller.loadingState.value is Loading
+                        ? const SizedBox.shrink()
+                        : _buildFav(theme, secondary),
+                  ),
+                ],
+              )
             ),
           ),
         ],
@@ -258,7 +273,7 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(width: 20),
+                const SizedBox(width: 25),
                 userInfo.face != null
                     ? Stack(
                         clipBehavior: Clip.none,
@@ -267,8 +282,8 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                             src: userInfo.face,
                             semanticsLabel: '头像',
                             type: ImageType.avatar,
-                            width: 55,
-                            height: 55,
+                            width: 65,
+                            height: 65,
                           ),
                           if (isVip)
                             Positioned(
@@ -284,8 +299,8 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                       )
                     : ClipOval(
                         child: Image.asset(
-                          width: 55,
-                          height: 55,
+                          width: 65,
+                          height: 65,
                           'assets/images/noface.jpeg',
                           semanticLabel: "默认头像",
                         ),
@@ -311,6 +326,7 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                               ),
                             ),
                           ),
+                          const SizedBox(width: 4),
                           Image.asset(
                             'assets/images/lv/lv${levelInfo == null
                                 ? 0
@@ -322,45 +338,87 @@ class _MediaPageState extends CommonPageState<MinePage, MineController>
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text.rich(
-                        TextSpan(
+                      IntrinsicWidth(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment
+                              .stretch, // Make children stretch to the intrinsic width
                           children: [
-                            TextSpan(
-                              text: '硬币 ',
-                              style: coinLabelStyle,
+                            FittedBox(
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '硬币 ',
+                                      style: TextStyle(
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
+                                        color: theme.colorScheme.outline,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: userInfo.money?.toString() ?? '-',
+                                      style: TextStyle(
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: "    经验 ",
+                                      style: TextStyle(
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
+                                        color: theme.colorScheme.outline,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: "${levelInfo?.currentExp ?? '-'}",
+                                      semanticsLabel:
+                                          "当前${levelInfo?.currentExp ?? '-'}",
+                                      style: TextStyle(
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: "/${levelInfo?.nextExp ?? '-'}",
+                                      semanticsLabel:
+                                          "升级需${levelInfo?.nextExp ?? '-'}",
+                                      style: TextStyle(
+                                        fontSize: theme
+                                            .textTheme
+                                            .labelSmall!
+                                            .fontSize,
+                                        color: theme.colorScheme.outline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            TextSpan(
-                              text: userInfo.money?.toString() ?? '-',
-                              style: coinValStyle,
-                            ),
-                            TextSpan(
-                              text: "      经验 ",
-                              style: coinLabelStyle,
-                            ),
-                            TextSpan(
-                              text: levelInfo?.currentExp?.toString() ?? '-',
-                              style: coinValStyle,
-                            ),
-                            TextSpan(
-                              text: "/${levelInfo?.nextExp ?? '-'}",
-                              style: coinLabelStyle,
+                            const SizedBox(height: 4),
+                            LinearProgressIndicator(
+                              minHeight: 2,
+                              value: levelInfo != null
+                                  ? (levelInfo.currentExp! / levelInfo.nextExp!)
+                                  : 0,
+                              backgroundColor: theme.colorScheme.inversePrimary,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.colorScheme.primary,
+                              ),
                             ),
                           ],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 225),
-                        child: LinearProgressIndicator(
-                          minHeight: 2.25,
-                          value: hasLevel
-                              ? levelInfo.currentExp! / levelInfo.nextExp!
-                              : 0,
-                          backgroundColor: theme.colorScheme.outline.withValues(
-                            alpha: 0.4,
-                          ),
-                          valueColor: AlwaysStoppedAnimation<Color>(secondary),
-                          stopIndicatorColor: Colors.transparent,
                         ),
                       ),
                     ],

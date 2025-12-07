@@ -323,20 +323,13 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
 
   List<Widget> _infos(ThemeData theme, VideoDetailData videoDetail) => [
     const SizedBox(height: 8),
-    GestureDetector(
-      onTap: () => Utils.copyText('${videoDetail.bvid}'),
-      child: Text(
-        videoDetail.bvid ?? '',
-        style: TextStyle(
-          fontSize: 14,
-          color: theme.colorScheme.secondary,
-        ),
-      ),
-    ),
     if (videoDetail.descV2?.isNotEmpty == true) ...[
       const SizedBox(height: 8),
       selectableRichText(
-        style: const TextStyle(height: 1.4),
+        style: const TextStyle(
+          fontSize: 12,
+          height: 1.2
+        ),
         buildContent(theme, videoDetail),
       ),
     ],
@@ -933,6 +926,17 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
   Widget _buildInfo(ThemeData theme, VideoDetailData videoDetail) => Row(
     spacing: 10,
     children: [
+      GestureDetector(
+        onTap: () => Utils.copyText(
+            '${videoDetail.bvid}'),
+        child: Text(
+          videoDetail.bvid ?? '',
+          style: TextStyle(
+            fontSize: 10,
+            color: theme.colorScheme.secondary,
+          ),
+        ),
+      ),
       StatWidget(
         type: StatType.play,
         value: videoDetail.stat?.view,

@@ -37,8 +37,7 @@ class VideoCardV extends StatelessWidget {
         break;
       case 'av':
         String bvid = videoItem.bvid ?? IdUtils.av2bv(videoItem.aid!);
-        int? cid =
-            videoItem.cid ??
+        int? cid = videoItem.cid ??
             await SearchHttp.ab2c(aid: videoItem.aid, bvid: bvid);
         if (cid != null) {
           PageUtils.toVideoPage(
@@ -68,14 +67,16 @@ class VideoCardV extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     void onLongPress() => imageSaveDialog(
-      title: videoItem.title,
-      cover: videoItem.cover,
-      bvid: videoItem.bvid,
-    );
+          title: videoItem.title,
+          cover: videoItem.cover,
+          bvid: videoItem.bvid,
+        );
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Card(
+          color: Colors.transparent,
+          elevation: 0,
           clipBehavior: Clip.hardEdge,
           child: InkWell(
             onTap: () => onPushDetail(Utils.makeHeroTag(videoItem.aid)),

@@ -55,7 +55,7 @@ class _FavPageState extends State<FavPage> with SingleTickerProviderStateMixin {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: const Text('我的收藏'),
+        title: const Text('收藏夹'),
         actions: [
           Obx(
             () => _showVideoFavMenu.value

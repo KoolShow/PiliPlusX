@@ -79,14 +79,6 @@ class _HomePageState extends State<HomePage>
   Widget searchBarAndUser(ThemeData theme) {
     return Row(
       children: [
-        searchBar(theme),
-        const SizedBox(width: 4),
-        Obx(
-          () => _homeController.accountService.isLogin.value
-              ? msgBadge(_mainController)
-              : const SizedBox.shrink(),
-        ),
-        const SizedBox(width: 8),
         Semantics(
           label: "我的",
           child: Obx(
@@ -96,15 +88,17 @@ class _HomePageState extends State<HomePage>
                     children: [
                       NetworkImgLayer(
                         type: ImageType.avatar,
-                        width: 34,
-                        height: 34,
+                        width: 44,
+                        height: 44,
+
                         src: _homeController.accountService.face.value,
                       ),
                       Positioned.fill(
                         child: Material(
                           type: MaterialType.transparency,
                           child: InkWell(
-                            onTap: _mainController.toMinePage,
+                            onTap: () =>
+                                _homeController.showUserInfoDialog(context),
                             splashColor: theme.colorScheme.primaryContainer
                                 .withValues(alpha: 0.3),
                             customBorder: const CircleBorder(),
@@ -140,10 +134,19 @@ class _HomePageState extends State<HomePage>
                   )
                 : defaultUser(
                     theme: theme,
-                    onPressed: _mainController.toMinePage,
+                    onPressed: () =>
+                        _homeController.showUserInfoDialog(context),
                   ),
           ),
         ),
+        const SizedBox(width: 8),
+        searchBar(theme),
+        const SizedBox(width: 4),
+        Obx(
+          () => _homeController.accountService.isLogin.value
+              ? msgBadge(_mainController)
+              : const SizedBox.shrink(),
+        )
       ],
     );
   }

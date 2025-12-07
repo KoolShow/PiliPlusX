@@ -100,6 +100,8 @@ class _MediaPageState extends CommonPageState<MinePage>
           padding: const .symmetric(vertical: 10),
           child: _buildHeaderActions,
         ),
+        _buildUserInfo(theme, secondary),
+        _buildActions(secondary),
         Expanded(
           child: Material(
             type: .transparency,
@@ -110,8 +112,6 @@ class _MediaPageState extends CommonPageState<MinePage>
                   padding: const .only(bottom: 150),
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
-                    _buildUserInfo(theme, secondary),
-                    _buildActions(secondary),
                     for (final tab in controller.mineTabs)
                       switch (tab) {
                         .favorite => Obx(_buildFav),

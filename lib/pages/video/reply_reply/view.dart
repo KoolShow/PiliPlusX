@@ -261,11 +261,20 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
               },
             ),
             Obx(
-              () => controller.replyTree.value == null
-                  ? IconButton(
-                      visualDensity: .compact,
-                      onPressed: () {
-                        if (controller.isEnd && controller.foldCard == null) {
+              () {
+                final isTree = controller.replyTree.value != null;
+                return Row(
+                  mainAxisSize: .min,
+                  children: [
+                    const Text('线程化', style: TextStyle(fontSize: 13)),
+                    Switch(
+                      value: isTree,
+                      materialTapTargetSize: .shrinkWrap,
+                      onChanged: (value) {
+                        if (!value) {
+                          controller.replyTree.value = null;
+                        } else if (controller.isEnd &&
+                            controller.foldCard == null) {
                           controller.buildTree();
                         } else if (controller.inFetchReply) {
                           SmartDialog.showToast('正在拉取评论，请稍后');
@@ -278,26 +287,12 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                           );
                         }
                       },
-                      icon: const Icon(
-                        Icons.view_comfortable_outlined,
-                        size: 22,
-                      ),
-                      color: colorScheme.outline,
-                      tooltip: '线程化展示',
-                    )
-                  : const SizedBox.shrink(),
+                    ),
+                  ],
+                );
+              },
             ),
-            Expanded(
-              child: Obx(
-                () => LinearProgressIndicator(
-                  // ignore: deprecated_member_use
-                  year2023: true,
-                  borderRadius: const .all(.circular(4)),
-                  value: controller.progress.value,
-                  stopIndicatorColor: Colors.transparent,
-                ),
-              ),
-            ),
+            const Spacer(),
             TextButton.icon(
               style: Style.buttonStyle,
               onPressed: controller.queryBySort,

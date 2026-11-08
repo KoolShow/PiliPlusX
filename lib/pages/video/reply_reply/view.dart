@@ -19,6 +19,7 @@ import 'package:PiliPlus/pages/video/reply_reply/controller.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/extension/widget_ext.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
@@ -260,38 +261,34 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     : const SizedBox.shrink();
               },
             ),
-            Obx(
-              () {
-                final isTree = controller.replyTree.value != null;
-                return Row(
-                  mainAxisSize: .min,
-                  children: [
-                    const Text('线程化', style: TextStyle(fontSize: 13)),
-                    Switch(
-                      value: isTree,
-                      materialTapTargetSize: .shrinkWrap,
-                      onChanged: (value) {
-                        if (!value) {
-                          controller.replyTree.value = null;
-                        } else if (controller.isEnd &&
-                            controller.foldCard == null) {
-                          controller.buildTree();
-                        } else if (controller.inFetchReply) {
-                          SmartDialog.showToast('正在拉取评论，请稍后');
-                        } else {
-                          showConfirmDialog(
-                            context: context,
-                            title: const Text('是否加载全部评论以显示线程化评论？'),
-                            content: const Text('这将消耗一定流量\n且可能导致IP或账号风控'),
-                            onConfirm: controller.nextReplyRound,
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
+            if (Pref.showReplyTreeBtn)
+              Obx(
+                () => controller.replyTree.value == null
+                    ? IconButton(
+                        visualDensity: .compact,
+                        onPressed: () {
+                          if (controller.isEnd && controller.foldCard == null) {
+                            controller.buildTree();
+                          } else if (controller.inFetchReply) {
+                            SmartDialog.showToast('正在拉取评论，请稍后');
+                          } else {
+                            showConfirmDialog(
+                              context: context,
+                              title: const Text('是否加载全部评论以显示线程化评论？'),
+                              content: const Text('这将消耗一定流量\n且可能导致IP或账号风控'),
+                              onConfirm: controller.nextReplyRound,
+                            );
+                          }
+                        },
+                        icon: const Icon(
+                          Icons.view_comfortable_outlined,
+                          size: 22,
+                        ),
+                        color: colorScheme.outline,
+                        tooltip: '线程化展示',
+                      )
+                    : const SizedBox.shrink(),
+              ),
             const Spacer(),
             TextButton.icon(
               style: Style.buttonStyle,

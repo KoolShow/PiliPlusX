@@ -61,6 +61,7 @@ abstract final class SettingBoxKey {
       defaultShowComment = 'defaultShowComment',
       replySortType = 'replySortType',
       reply2SortType = 'reply2SortType',
+      showReplyTreeBtn = 'showReplyTreeBtn',
       defaultDynamicType = 'defaultDynamicType',
       showDynInteraction = 'showDynInteraction',
       enableHotKey = 'enableHotKey',

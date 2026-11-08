@@ -773,6 +773,9 @@ abstract final class Pref {
         defaultValue: ReplySortType.time.index,
       )];
 
+  static bool get showReplyTreeBtn =>
+      _setting.get(SettingBoxKey.showReplyTreeBtn, defaultValue: true);
+
   static DynamicBadgeMode get dynamicBadgeMode =>
       DynamicBadgeMode.values[_setting.get(
         SettingBoxKey.dynamicBadgeMode,

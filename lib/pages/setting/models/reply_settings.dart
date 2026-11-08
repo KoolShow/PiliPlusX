@@ -102,6 +102,13 @@ List<SettingsModel> get replySettings => [
     leading: const Icon(Icons.compress),
     onTap: _showReplyDepthDialog,
   ),
+  const SwitchModel(
+    title: '显示线程化评论按钮',
+    subtitle: '在评论详情页显示线程化展示按钮',
+    leading: Icon(Icons.view_comfortable_outlined),
+    setKey: SettingBoxKey.showReplyTreeBtn,
+    defaultVal: true,
+  ),
   SwitchModel(
     title: '评论区搜索关键词',
     subtitle: '展示评论区搜索关键词',

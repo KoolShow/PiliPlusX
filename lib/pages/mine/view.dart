@@ -30,9 +30,14 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart' hide ListTile;
 
 class MinePage extends StatefulWidget {
-  const MinePage({super.key, this.showBackBtn = false});
+  const MinePage({
+    super.key,
+    this.showBackBtn = false,
+    this.isUserInfo = false,
+  });
 
   final bool showBackBtn;
+  final bool isUserInfo;
 
   @override
   State<MinePage> createState() => _MediaPageState();

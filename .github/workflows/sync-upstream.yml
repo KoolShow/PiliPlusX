@@ -1,0 +1,117 @@
+name: Sync upstream
+
+on:
+  # 每天 20:00 UTC（北京时间次日 04:00）。想更快可改成 '0 */6 * * *'。
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "即使上游没有新提交也执行一次 rebase"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          # 配置 PAT 后，push 才能触发 build.yml；否则 GITHUB_TOKEN 的 push 不会触发其他工作流。
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/bggRGjQaUbCoE/PiliPlus.git
+
+      - name: Fetch upstream
+        id: fetch
+        run: |
+          git fetch --no-tags upstream main
+          upstream_sha=$(git rev-parse upstream/main)
+          echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Upstream $upstream_sha is already contained in main."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Upstream $upstream_sha has new commits."
+          fi
+
+      - name: Rebase onto upstream
+        id: rebase
+        if: steps.fetch.outputs.changed == 'true' || inputs.force
+        run: |
+          set +e
+          git rebase upstream/main
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            git diff --name-only --diff-filter=U > /tmp/conflicts.txt || true
+            git rebase --abort
+            echo "Rebase stopped on conflicts:"
+            cat /tmp/conflicts.txt
+          else
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push rebased main
+        if: steps.rebase.outputs.conflict == 'false' && (steps.fetch.outputs.changed == 'true' || inputs.force)
+        run: git push --force-with-lease origin HEAD:main
+
+      - name: Report conflict
+        if: steps.rebase.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.sha }}
+        run: |
+          {
+            echo "上游 \`bggRGjQaUbCoE/PiliPlus\` 的 main 已更新到 \`$UPSTREAM_SHA\`，自动 rebase 因冲突中止，main 未被推送。"
+            echo
+            echo "冲突文件："
+            sed 's/^/- `/' /tmp/conflicts.txt | sed 's/$/`/'
+            echo
+            echo "本地处理："
+            echo '```bash'
+            echo "git fetch upstream"
+            echo "git rebase upstream/main"
+            echo "# 解决冲突后"
+            echo "git rebase --continue"
+            echo "git push --force-with-lease origin main"
+            echo '```'
+          } > /tmp/body.md
+
+          existing=$(gh issue list --state open \
+            --search 'in:title "[upstream-sync]"' \
+            --json number --jq '.[0].number')
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file /tmp/body.md
+          else
+            gh issue create \
+              --title "[upstream-sync] rebase conflict with $UPSTREAM_SHA" \
+              --body-file /tmp/body.md
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Upstream sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "- upstream: \`${{ steps.fetch.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- changed: \`${{ steps.fetch.outputs.changed }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- conflict: \`${{ steps.rebase.outputs.conflict }}\`" >> "$GITHUB_STEP_SUMMARY"
